@@ -1,0 +1,2057 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sistema da Biblioteca</title>
+  <style>
+    :root {
+      --primary: #22C55E;
+      --primary-dark: #15803D;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --border: #E5E7EB;
+      --text: #1F2937;
+      --muted: #6B7280;
+
+      --danger: #ef4444;
+      --danger-dark: #dc2626;
+
+      --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+      --shadow: 0 10px 30px rgba(16, 24, 40, 0.10);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar (Webkit) */
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.15); border-radius: 999px; }
+    *::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.05); }
+
+    /* Layout */
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 280px;
+      height: 100vh;
+      background: #ffffff;
+      border-right: 1px solid var(--border);
+      padding: 18px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      z-index: 50;
+    }
+
+    .sidebar .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px 10px 6px;
+    }
+
+    .sidebar .brand .title {
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .sidebar .brand .hr {
+      height: 1px;
+      background: var(--border);
+      margin-top: 8px;
+    }
+
+    .sidebar .section-title {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      padding: 6px 10px;
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar nav {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 10px;
+      border-radius: 12px;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 700;
+      border: 1px solid transparent;
+      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      background: rgba(34, 197, 94, 0.08);
+      border-color: rgba(34, 197, 94, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .nav-item.active {
+      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    .sidebar .bottom {
+      margin-top: auto;
+      padding-top: 12px;
+    }
+
+    .sidebar .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 12px 10px;
+    }
+
+    /* Mobile sidebar */
+    .sidebar-toggle {
+      display: none;
+    }
+
+    /* Main */
+    .main {
+      grid-column: 2;
+      padding: 20px 18px 34px;
+    }
+
+    /* Header */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(248, 250, 252, 0.78);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(229, 231, 235, 0.85);
+      border-radius: 16px;
+      padding: 14px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-left: 0;
+      box-shadow: var(--shadow-sm);
+      animation: fadeIn 450ms ease both;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .topbar .left {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 220px;
+    }
+
+    .topbar .hello {
+      font-size: 14px;
+      font-weight: 900;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+    }
+
+    .topbar .subtitle {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+
+    .topbar .right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+      flex: 1;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      min-width: 360px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .search input {
+      border: 0;
+      outline: none;
+      width: 100%;
+      background: transparent;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .search input::placeholder { color: var(--muted); font-weight: 650; }
+
+    .icon-btn {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+    }
+
+    .icon-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(34, 197, 94, 0.35);
+      box-shadow: 0 14px 34px rgba(16, 24, 40, 0.12);
+    }
+
+    .avatar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 8px 10px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .avatar .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14);
+    }
+
+    .avatar .name {
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: -0.01em;
+    }
+
+    /* Stats */
+    .stats {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+      cursor: default;
+      animation: fadeIn 520ms ease both;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(34, 197, 94, 0.35);
+      box-shadow: var(--shadow);
+    }
+
+    .stat-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(34, 197, 94, 0.12);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      display: grid;
+      place-items: center;
+      font-size: 20px;
+    }
+
+    .stat-number {
+      margin-top: 10px;
+      font-size: 30px;
+      font-weight: 1000;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    .stat-label {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .stat-emoji {
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    /* Panels */
+    .panel-grid {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      animation: fadeIn 600ms ease both;
+    }
+
+    .card-header {
+      padding: 16px 16px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(34, 197, 94, 0.10), rgba(34, 197, 94, 0.04));
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-header h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 1000;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+
+    .card-header small {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .card-body {
+      padding: 16px;
+    }
+
+    /* Inputs */
+    /* IMPORTANT: do not remove existing inputs; only style them */
+    input, select {
+      width: 100%;
+      height: 46px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0 12px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      font-weight: 750;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 110px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+      resize: vertical;
+      font-weight: 700;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(34, 197, 94, 0.70);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+    }
+
+    label {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 900;
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    @media (min-width: 860px) {
+      .row.two {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    .form-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    /* Buttons */
+    button {
+      border: 0;
+      border-radius: 12px;
+      height: 46px;
+      padding: 0 14px;
+      cursor: pointer;
+      font-weight: 950;
+      color: #fff;
+      background: var(--primary);
+      transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      user-select: none;
+    }
+
+    button:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+      box-shadow: 0 12px 25px rgba(21, 128, 61, 0.18);
+    }
+
+    button.secondary {
+      background: #F3F4F6;
+      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: none;
+    }
+
+    button.secondary:hover {
+      background: #E5E7EB;
+      box-shadow: none;
+    }
+
+    button.danger {
+      background: var(--danger);
+    }
+
+    button.danger:hover { background: var(--danger-dark); }
+
+    .btn-small {
+      height: 38px;
+      padding: 0 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .btn-outline {
+      background: #fff !important;
+      border: 1px solid rgba(229, 231, 235, 1) !important;
+      color: var(--text) !important;
+    }
+
+    /* Table */
+    .table-wrap {
+      margin-top: 14px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #fff;
+    }
+
+    thead th {
+      background: rgba(34, 197, 94, 0.10);
+      color: #065F46;
+      font-size: 12px;
+      font-weight: 1000;
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid rgba(34, 197, 94, 0.18);
+    }
+
+    td {
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(229, 231, 235, 1);
+      font-size: 13px;
+      font-weight: 750;
+      vertical-align: top;
+    }
+
+    tbody tr:last-child td { border-bottom: 0; }
+
+    tbody tr:hover td {
+      background: rgba(34, 197, 94, 0.06);
+    }
+
+    .table-actions {
+      text-align: right;
+    }
+
+    .inline-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-weight: 900;
+      font-size: 13px;
+      padding: 14px 2px 0;
+    }
+
+    /* Backup panel */
+    .backup .card-header {
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.10), rgba(239, 68, 68, 0.04));
+    }
+
+    /* Layout blocks */
+    .full-width {
+      margin-top: 12px;
+    }
+
+    /* Make existing “span-2” keep working visually */
+    .span-2 { grid-column: 1 / -1; }
+
+    /* Fade in */
+    .card, .stat-card, .topbar { animation: fadeIn 520ms ease both; }
+
+    /* Mobile */
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      .main { grid-column: 1; padding: 14px 12px 28px; margin-left: 0; }
+
+      .stats { grid-template-columns: 1fr 1fr; }
+      .panel-grid { grid-template-columns: 1fr; }
+
+      .sidebar {
+        transform: translateX(-100%);
+        transition: transform 200ms ease;
+      }
+
+      .sidebar.open { transform: translateX(0); }
+
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+
+      .topbar .left { min-width: auto; }
+      .search { display: none; }
+    }
+
+    /* Ensure sections use our spacing */
+    .legacy-section {
+      padding: 0;
+    }
+
+    /* Helpers */
+    .muted { color: var(--muted); }
+
+    /* Section switching (nav) */
+    [data-section="livros"], [data-section="alunos"], [data-section="emprestimos"], [data-section="relatorios"], [data-section="ranking"], [data-section="dashboard"], [data-section="prateleira"] {
+      display: none;
+    }
+    [data-section="dashboard"].active {
+      display: grid;
+    }
+    [data-section="livros"].active,
+    [data-section="alunos"].active,
+    [data-section="emprestimos"].active,
+    [data-section="relatorios"].active,
+    [data-section="ranking"].active,
+    [data-section="prateleira"].active {
+      display: block;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      padding: 16px;
+      opacity: 0;
+      transition: opacity 220ms ease;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-dialog {
+      background: #ffffff;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 25px 60px rgba(15, 23, 42, 0.25);
+      width: 100%;
+      max-width: 580px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transform: translateY(12px) scale(0.98);
+      transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+      animation: modalSlideIn 240ms ease forwards;
+    }
+
+    .modal-dialog.modal-lg { max-width: 780px; }
+    .modal-dialog.modal-xl { max-width: 960px; }
+
+    @keyframes modalSlideIn {
+      from { transform: translateY(14px) scale(0.97); opacity: 0.7; }
+      to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .modal-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), #ffffff);
+    }
+
+    .modal-header h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 1000;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .modal-close-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 900;
+      padding: 0;
+      transition: background 160ms, color 160ms;
+    }
+
+    .modal-close-btn:hover {
+      background: #e2e8f0;
+      color: var(--text);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      max-height: calc(90vh - 140px);
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      background: #f8fafc;
+    }
+
+    /* Notification Bell & Drawer */
+    .notif-btn {
+      position: relative;
+    }
+
+    .notif-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      background: #ef4444;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 900;
+      min-width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+      box-shadow: 0 0 0 2px #ffffff, 0 2px 6px rgba(239, 68, 68, 0.5);
+      animation: pulseBadge 2s infinite;
+    }
+
+    @keyframes pulseBadge {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.12); }
+      100% { transform: scale(1); }
+    }
+
+    .notif-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .notif-card {
+      padding: 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .notif-card:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .notif-card.overdue {
+      border-color: rgba(239, 68, 68, 0.35);
+      background: linear-gradient(180deg, #fff5f5, #ffffff);
+    }
+
+    .notif-card.warning {
+      border-color: rgba(245, 158, 11, 0.35);
+      background: linear-gradient(180deg, #fffbeb, #ffffff);
+    }
+
+    .notif-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .notif-student {
+      font-weight: 900;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .notif-book {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .notif-meta {
+      font-size: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .notif-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+
+    /* Status Pills */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+    }
+
+    .status-pill.badge-overdue {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #f87171;
+    }
+
+    .status-pill.badge-warning {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+
+    .status-pill.badge-soon {
+      background: #e0f2fe;
+      color: #075985;
+      border: 1px solid #7dd3fc;
+    }
+
+    .status-pill.badge-ok {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+    }
+
+    .status-pill.badge-returned {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+    }
+
+    /* Dashboard Alert Banner */
+    .alert-banner {
+      background: linear-gradient(135deg, #fef2f2, #fee2e2);
+      border: 1px solid #fca5a5;
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      box-shadow: var(--shadow-sm);
+      animation: fadeIn 400ms ease both;
+    }
+
+    .alert-banner-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .alert-banner-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .alert-banner-title {
+      font-weight: 900;
+      font-size: 14px;
+      color: #991b1b;
+    }
+
+    .alert-banner-desc {
+      font-size: 12px;
+      color: #7f1d1d;
+      font-weight: 700;
+    }
+
+    /* Virtual Bookshelf Styles */
+    .shelf-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px;
+      background: #ffffff;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      margin-bottom: 18px;
+    }
+
+    .shelf-filters {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+    }
+
+    .shelf-view-toggle {
+      display: flex;
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 3px;
+      border: 1px solid var(--border);
+    }
+
+    .shelf-view-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      border: 0;
+      cursor: pointer;
+      box-shadow: none;
+    }
+
+    .shelf-view-btn.active {
+      background: #ffffff;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .shelf-view-btn:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* Shelf Rack Section */
+    .shelf-rack {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .wood-shelf-section {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .wood-shelf-header {
+      padding: 14px 18px;
+      background: linear-gradient(180deg, #f8fafc, #ffffff);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .wood-shelf-title {
+      font-size: 15px;
+      font-weight: 950;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wood-shelf-count {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+      background: #f1f5f9;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    /* Shelf row container */
+    .wood-shelf-stage {
+      padding: 24px 20px 0;
+      background: radial-gradient(circle at 50% 0%, #ffffff 0%, #f1f5f9 100%);
+      position: relative;
+      min-height: 230px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      overflow-x: auto;
+    }
+
+    .shelf-books-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      padding: 0 10px 4px;
+      min-width: max-content;
+    }
+
+    /* 3D Realistic Book Spine */
+    .spine-book {
+      position: relative;
+      width: 44px;
+      height: 175px;
+      border-radius: 4px 6px 6px 4px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 4px;
+      color: #ffffff;
+      box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.25), inset 2px 0 4px rgba(255, 255, 255, 0.2), inset -2px 0 4px rgba(0, 0, 0, 0.3);
+      transition: transform 200ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms ease;
+      transform-origin: bottom center;
+      user-select: none;
+    }
+
+    .spine-book::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 4px;
+      background: linear-gradient(90deg, rgba(255,255,255,0.3), transparent);
+      border-radius: 4px 0 0 4px;
+    }
+
+    .spine-book:hover {
+      transform: translateY(-16px) scale(1.04) rotate(-1deg);
+      box-shadow: 0 18px 25px rgba(0, 0, 0, 0.35), inset 2px 0 4px rgba(255, 255, 255, 0.3);
+      z-index: 10;
+    }
+
+    .spine-icon {
+      font-size: 14px;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.4));
+    }
+
+    .spine-title {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-height: 105px;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+
+    .spine-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 0 6px #22c55e;
+    }
+
+    .spine-status-dot.out {
+      background: #ef4444;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 0 6px #ef4444;
+    }
+
+    /* Wooden Plank Base */
+    .wood-plank {
+      height: 18px;
+      background: linear-gradient(180deg, #d97706 0%, #b45309 40%, #78350f 100%);
+      border-radius: 2px 2px 6px 6px;
+      box-shadow: 0 8px 18px rgba(120, 53, 15, 0.35), inset 0 2px 3px rgba(251, 191, 36, 0.5);
+      position: relative;
+    }
+
+    .wood-plank::after {
+      content: '';
+      position: absolute;
+      top: 18px;
+      left: 10px;
+      right: 10px;
+      height: 6px;
+      background: rgba(120, 53, 15, 0.2);
+      filter: blur(4px);
+    }
+
+    /* Grid View of Bookshelf */
+    .shelf-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 16px;
+    }
+
+    .book-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+    }
+
+    .book-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    .book-card-cover {
+      height: 130px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      color: #ffffff;
+      position: relative;
+    }
+
+    .book-card-cover::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.35));
+      pointer-events: none;
+    }
+
+    .book-card-cover-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 2;
+    }
+
+    .book-card-icon { font-size: 22px; }
+
+    .book-card-cover-title {
+      font-weight: 1000;
+      font-size: 15px;
+      line-height: 1.25;
+      z-index: 2;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .book-card-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .book-card-author {
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .book-card-footer {
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    /* QR Scanner UI */
+    .qr-scanner-box {
+      width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #0f172a;
+      position: relative;
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #qrVideoElem {
+      width: 100%;
+      max-height: 320px;
+      object-fit: cover;
+    }
+
+    .scanner-reticle {
+      position: absolute;
+      width: 220px;
+      height: 220px;
+      border: 2px dashed rgba(34, 197, 94, 0.85);
+      border-radius: 16px;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .scanner-laser {
+      width: 100%;
+      height: 2px;
+      background: #22c55e;
+      box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e;
+      animation: scanLaser 2s infinite alternate ease-in-out;
+    }
+
+    @keyframes scanLaser {
+      0% { transform: translateY(-95px); opacity: 0.3; }
+      100% { transform: translateY(95px); opacity: 1; }
+    }
+
+    /* Book Label & QR Print Card */
+    .qr-label-card {
+      background: #ffffff;
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      max-width: 440px;
+      margin: 0 auto;
+    }
+
+    .qr-code-img {
+      width: 128px;
+      height: 128px;
+      flex-shrink: 0;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 4px;
+      background: #fff;
+    }
+
+    @media print {
+      body * { visibility: hidden; }
+      #printableLabel, #printableLabel * { visibility: visible; }
+      #printableLabel {
+        position: fixed;
+        top: 20px;
+        left: 20px;
+        width: 320px;
+        border: 1px solid #000;
+        padding: 14px;
+        background: #fff;
+        display: flex !important;
+      }
+    }
+
+
+    /* Toast */
+    #toast {
+
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(17, 24, 39, 0.92);
+      color: #fff;
+      border: 1px solid rgba(229, 231, 235, 0.5);
+      padding: 12px 14px;
+      border-radius: 14px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+      display: none;
+      max-width: 92vw;
+      z-index: 100;
+      font-weight: 900;
+    }
+
+    /* Badge if used later */
+    .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; font-weight: 1000; }
+
+    .pill {
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+      background: rgba(255,255,255,0.8);
+    }
+
+    /* Keep legacy markup present but restyled */
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    /* Secondary button class existing */
+    button.secondary {
+      background: #fff;
+      border: 1px solid var(--border);
+      color: var(--text);
+      box-shadow: none;
+    }
+
+    button.secondary:hover {
+      background: rgba(34, 197, 94, 0.06);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    /* Date input height consistency */
+    input[type="date"] { padding: 0 12px; }
+
+    /* Reduce motion */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+
+    /* Sidebar hamburger */
+    .hamburger {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      display: none;
+      place-items: center;
+      box-shadow: var(--shadow-sm);
+    }
+    .hamburger svg { opacity: 0.9; }
+
+    @media (max-width: 980px) {
+      .hamburger { display: grid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar (fixed) -->
+    <aside class="sidebar" id="sidebar">
+      <div class="brand">
+        <div class="title">📚 <span>Sistema Biblioteca</span></div>
+        <div class="hr"></div>
+      </div>
+
+      <div class="section-title">━━━━━━━━━━━━━━━━</div>
+      <nav>
+        <a class="nav-item active" href="#" data-nav="dashboard">🏠 Dashboard</a>
+        <a class="nav-item" href="#" data-nav="prateleira">📚 Prateleira Virtual</a>
+        <a class="nav-item" href="#" data-nav="livros">📖 Livros</a>
+        <a class="nav-item" href="#" data-nav="alunos">👨 Alunos</a>
+        <a class="nav-item" href="#" data-nav="emprestimos">🔄 Empréstimos</a>
+        <a class="nav-item" href="#" data-nav="relatorios">📊 Relatórios</a>
+        <a class="nav-item" href="#" data-nav="ranking">🏆 Ranking</a>
+      </nav>
+
+      <div class="divider"></div>
+
+      <div class="section-title">🟢 Sistema Online</div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Header -->
+      <div class="topbar">
+        <div class="left">
+          <div class="hello">
+            <button class="hamburger" type="button" aria-label="Abrir menu" id="sidebarToggle">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6h16M4 12h16M4 18h16" stroke="#15803D" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <span>Olá, Bibliotecária 👋</span>
+          </div>
+          <div class="subtitle">Sistema de Biblioteca</div>
+        </div>
+
+        <div class="right" id="topbarRight">
+          <button class="icon-btn notif-btn" id="notifBellBtn" type="button" title="Central de Notificações de Prazos" aria-label="Notificações">
+            <span style="font-size: 19px;">🔔</span>
+            <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
+          </button>
+
+          <div class="avatar" aria-label="Usuário">
+            <div class="dot"></div>
+            <div class="name">Bibliotecária</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Alert Banner (Overdue notification on Dashboard) -->
+      <div id="dashboardAlertBanner" class="alert-banner" style="display:none; margin-top: 16px;" data-section="dashboard">
+        <div class="alert-banner-content">
+          <div class="alert-banner-icon">⚠️</div>
+          <div>
+            <div class="alert-banner-title" id="alertBannerTitle">Atenção: Existem empréstimos com prazo vencido!</div>
+            <div class="alert-banner-desc" id="alertBannerDesc">Alunos precisam devolver livros pendentes.</div>
+          </div>
+        </div>
+        <button type="button" class="btn-small danger" id="btnVerNotificacoesBanner">Ver Alunos em Atraso</button>
+      </div>
+
+      <!-- Stats -->
+      <section class="stats active" aria-label="Estatísticas" data-section="dashboard">
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon"><span class="stat-emoji">📚</span></div>
+              <div class="stat-number" id="statLivros">0</div>
+              <div class="stat-label">Livros cadastrados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.25)"><span class="stat-emoji">👨</span></div>
+              <div class="stat-number" id="statAlunos">0</div>
+              <div class="stat-label">Alunos cadastrados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(34, 197, 94, 0.10); border-color: rgba(34, 197, 94, 0.25)"><span class="stat-emoji">🔄</span></div>
+              <div class="stat-number" id="statEmprestimosAtivos">0</div>
+              <div class="stat-label">Empréstimos ativos</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card" id="statVencidosCard">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.25)"><span class="stat-emoji">⚠️</span></div>
+              <div class="stat-number" id="statEmprestimosVencidos" style="color: var(--danger);">0</div>
+              <div class="stat-label">Prazos vencidos</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gerenciamento (2 colunas) -->
+      <section class="panel-grid" aria-label="Gerenciamento">
+        <!-- Card: Cadastro de Livros -->
+        <section class="card legacy-section" id="secLivros" data-section="livros">
+          <header class="card-header">
+            <div>
+              <h2>📖 Cadastro de Livros</h2>
+              <small id="livrosCountSmall">0 livros</small>
+              <small class="muted" id="livrosDisponiveisSmall">0 disponíveis</small>
+            </div>
+            <small class="muted">Organize seu acervo</small>
+          </header>
+          <div class="card-body">
+            <!-- FORM (não alterar IDs existentes) -->
+            <form class="form-grid" id="livroForm">
+              <div class="row two">
+                <div>
+                  <label for="livroTitulo">Título</label>
+                  <input id="livroTitulo" required placeholder="Ex.: Dom Casmurro" maxlength="120" />
+                </div>
+                <div>
+                  <label for="livroAutor">Autor</label>
+                  <input id="livroAutor" required placeholder="Ex.: Machado de Assis" maxlength="120" />
+                </div>
+              </div>
+
+              <div class="row two">
+                <div>
+                  <label for="livroCategoria">Categoria</label>
+                  <select id="livroCategoria" required>
+                    <option value="">Selecione...</option>
+                    <option>Romance</option>
+                    <option>Comédia</option>
+                    <option>Fantasia</option>
+                    <option>Aventura</option>
+                    <option>Suspense</option>
+                    <option>Ficção Científica</option>
+                    <option>Biografia</option>
+                    <option>História</option>
+                    <option>Outro</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="livroAcervo">Quantidade (exemplares)</label>
+                  <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
+                </div>
+              </div>
+
+              <div class="actions">
+                <button type="submit">Cadastrar livro</button>
+                <button type="button" class="secondary" id="btnAbrirScannerLivro">📷 Ler QR / Código de Barras (ISBN)</button>
+                <button type="button" class="secondary" id="livroExportar">Exportar dados</button>
+              </div>
+            </form>
+
+            <!-- Tabela Livros Cadastrados -->
+            <div class="table-wrap">
+              <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
+                <input id="livroBusca" placeholder="Buscar por título, autor ou categoria..." style="flex:1; min-width: 220px;" />
+                <button type="button" class="secondary btn-small" id="livroLimparBusca">Limpar</button>
+              </div>
+
+              <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
+                <button type="button" class="secondary btn-small" id="livrosPopularBtn">Popular 300 livros (opcional)</button>
+                <span class="pill" style="border-color: var(--border);">Dica: Empréstimos já usam livros populares</span>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Título</th>
+                    <th>Autor</th>
+                    <th>Categoria</th>
+                    <th>Exemplares</th>
+                    <th style="width: 170px; text-align:right;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="livrosBody"></tbody>
+              </table>
+              <div class="empty" id="livrosEmpty" style="display:none;">Nenhum livro cadastrado.</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Card: Cadastro de Alunos -->
+        <section class="card legacy-section" id="secAlunos" data-section="alunos">
+          <header class="card-header">
+            <div>
+              <h2>👨 Cadastro de Alunos</h2>
+              <small id="alunosCountSmall">0 alunos</small>
+            </div>
+            <small class="muted">Gerencie turmas</small>
+          </header>
+          <div class="card-body">
+            <form class="form-grid" id="alunoForm">
+              <div class="row two">
+                <div>
+                  <label for="alunoNome">Nome do aluno</label>
+                  <input id="alunoNome" required placeholder="Ex.: Maria Silva" maxlength="80" />
+                </div>
+                <div>
+                  <label for="alunoTurma">Turma</label>
+                  <input id="alunoTurma" required placeholder="Ex.: 7ºA" maxlength="20" />
+                </div>
+              </div>
+
+              <div class="actions">
+                <button type="submit">Cadastrar aluno</button>
+                <button type="button" class="secondary" id="alunoExportar">Exportar dados</button>
+              </div>
+            </form>
+
+            <div class="table-wrap">
+              <div class="actions" style="margin-top:0; margin-bottom:12px;">
+                <input id="alunoBusca" placeholder="Buscar por nome ou turma..." style="flex:1; min-width: 220px;" />
+                <button type="button" class="secondary btn-small" id="alunoLimparBusca">Limpar</button>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Turma</th>
+                    <th style="width: 170px; text-align:right;">Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="alunosBody"></tbody>
+              </table>
+              <div class="empty" id="alunosEmpty" style="display:none;">Nenhum aluno cadastrado.</div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <!-- Empréstimos (full width) -->
+        <section class="card full-width" id="secEmprestimos" data-section="emprestimos">
+
+
+        <header class="card-header">
+          <div>
+            <h2>🔄 Empréstimos</h2>
+            <small>Cadastro, pesquisa e tabela em um único card</small>
+          </div>
+          <small class="muted">Retirada e devolução</small>
+        </header>
+        <div class="card-body">
+          <!-- Cadastro -->
+          <div class="form-grid" style="margin-bottom: 16px;">
+            <div class="row two">
+              <div>
+                <label for="emprestimoAluno">Aluno</label>
+                <select id="emprestimoAluno" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div>
+                <label for="emprestimoLivro">Livro</label>
+                <select id="emprestimoLivro" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row two">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                  <label for="emprestimoData">Data da retirada</label>
+                  <input id="emprestimoData" type="date" required />
+                </div>
+                <div>
+                  <label for="emprestimoPrazo">Prazo de devolução</label>
+                  <select id="emprestimoPrazo">
+                    <option value="7">7 dias (Padrão)</option>
+                    <option value="14">14 dias (2 semanas)</option>
+                    <option value="21">21 dias (3 semanas)</option>
+                    <option value="30">30 dias (1 mês)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label>Ações rápidas</label>
+                <div style="display: flex; gap: 8px;">
+                  <button type="button" id="emprestarBtn" style="flex:1;" class="btn-small">Registrar empréstimo</button>
+                  <button type="button" id="btnAbrirScannerEmprestimo" class="secondary btn-small" title="Escanear QR Code do Livro">📷 Ler QR</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pesquisa + Filtros + Tabela -->
+          <div class="table-wrap" style="margin-top:0;">
+            <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
+              <input id="emprestimoBusca" placeholder="Buscar por aluno, turma, livro ou status..." style="flex:1; min-width: 220px;" />
+              <button type="button" class="secondary btn-small" id="emprestimoLimparBusca">Limpar</button>
+            </div>
+
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;" id="emprestimoFiltrosContainer">
+              <button type="button" class="secondary btn-small emp-filter active" data-emp-filter="todos">Todos</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="vencidos" style="color: #991b1b;">⚠️ Vencidos</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="vencendo" style="color: #92400e;">⏳ Vencendo em Breve</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="no_prazo" style="color: #166534;">🟢 No Prazo</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="devolvidos">⚪ Devolvidos</button>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Livro</th>
+                  <th>Retirada</th>
+                  <th>Prazo Limite</th>
+                  <th>Status</th>
+                  <th>Devolução</th>
+                  <th style="width: 170px; text-align:right;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="emprestimosBody"></tbody>
+            </table>
+            <div class="empty" id="emprestimosEmpty" style="display:none;">Nenhum empréstimo registrado.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Relatórios (placeholder) -->
+      <section class="card full-width legacy-section" id="secRelatorios">
+        <header class="card-header">
+          <div>
+            <h2>📊 Relatórios</h2>
+            <small>Visão geral e exportação de dados</small>
+          </div>
+          <small class="muted">Em breve</small>
+        </header>
+        <div class="card-body">
+          <div class="row two">
+            <div>
+              <label>Resumo rápido</label>
+              <div id="relatorioResumo" class="empty" style="margin-top:0; padding-top:0;">Selecione uma área no menu para começar.</div>
+            </div>
+            <div>
+              <label>Ações</label>
+              <div class="actions" style="margin-top:0;">
+                <button type="button" class="secondary" id="gerarRelatorioBtn">Gerar relatório</button>
+                <button type="button" class="secondary" id="exportarPdfBtn">Exportar PDF</button>
+                <button type="button" class="secondary" id="limparRelatoriosBtn">Apagar relatórios</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <label>Histórico de atividades</label>
+            <table>
+              <thead>
+                <tr>
+                  <th>Atividade</th>
+                </tr>
+              </thead>
+              <tbody id="relatoriosBody"></tbody>
+            </table>
+            <div class="empty" id="relatoriosEmpty" style="display:none;">Nenhuma atividade registrada ainda.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Prateleira Virtual (nova seção completa) -->
+      <section class="card full-width legacy-section" id="secPrateleira" data-section="prateleira">
+        <header class="card-header">
+          <div>
+            <h2>📚 Prateleira Virtual da Biblioteca</h2>
+            <small>Organize, visualize e explore seu acervo de forma visual e intuitiva</small>
+          </div>
+          <small class="muted" id="prateleiraTotalLivros">0 livros no acervo</small>
+        </header>
+        <div class="card-body">
+          <!-- Toolbar de controles do Admin -->
+          <div class="shelf-toolbar">
+            <div class="shelf-filters">
+              <div style="min-width: 170px;">
+                <label style="margin-bottom: 4px;">Agrupar Estantes por:</label>
+                <select id="shelfGroupBy" style="height: 38px; font-size: 13px;">
+                  <option value="categoria">📂 Gênero / Categoria</option>
+                  <option value="autor">✍️ Autor</option>
+                  <option value="disponibilidade">🟢 Disponibilidade</option>
+                  <option value="nenhum">🏢 Estante Única</option>
+                </select>
+              </div>
+
+              <div style="min-width: 170px;">
+                <label style="margin-bottom: 4px;">Ordenar Livros por:</label>
+                <select id="shelfSortBy" style="height: 38px; font-size: 13px;">
+                  <option value="titulo-asc">🔤 Título (A - Z)</option>
+                  <option value="titulo-desc">🔤 Título (Z - A)</option>
+                  <option value="autor-asc">✍️ Autor (A - Z)</option>
+                  <option value="acervo-desc">📦 Quantidade de Exemplares</option>
+                  <option value="recentes">🕒 Mais Recentes</option>
+                  <option value="populares">⭐ Mais Populares</option>
+                </select>
+              </div>
+
+              <div style="min-width: 150px;">
+                <label style="margin-bottom: 4px;">Filtrar Categoria:</label>
+                <select id="shelfFilterCategory" style="height: 38px; font-size: 13px;">
+                  <option value="">Todas as Categorias</option>
+                </select>
+              </div>
+
+              <div style="min-width: 150px;">
+                <label style="margin-bottom: 4px;">Filtrar Status:</label>
+                <select id="shelfFilterStatus" style="height: 38px; font-size: 13px;">
+                  <option value="">Todos os Status</option>
+                  <option value="disponivel">Apenas Disponíveis</option>
+                  <option value="esgotado">Esgotados / Emprestados</option>
+                </select>
+              </div>
+
+              <div style="flex: 1; min-width: 180px;">
+                <label style="margin-bottom: 4px;">Buscar na Prateleira:</label>
+                <input id="shelfSearchInput" placeholder="Buscar título ou autor..." style="height: 38px; font-size: 13px;" />
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+              <label style="margin-bottom: 0;">Visualização:</label>
+              <div class="shelf-view-toggle">
+                <button type="button" class="shelf-view-btn active" id="btnViewSpines" title="Visualizar Estantes de Madeira">🪵 Estante</button>
+                <button type="button" class="shelf-view-btn" id="btnViewGrid" title="Visualizar Cards de Livros">🖼️ Catálogo</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Container dinâmico das prateleiras -->
+          <div id="shelfContainer" class="shelf-rack">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Ranking -->
+      <section class="card full-width legacy-section" id="secRanking" data-section="ranking">
+        <header class="card-header">
+          <div>
+            <h2>🏆 Ranking</h2>
+            <small>Indicadores de desempenho do mês atual</small>
+          </div>
+          <small class="muted">Dados atualizados automaticamente</small>
+        </header>
+        <div class="card-body">
+          <div class="panel-grid">
+            <section class="card" id="rankingAlunoCard" aria-label="Aluno mais ativo do mês"></section>
+            <section class="card" id="rankingLivroCard" aria-label="Livro mais lido do mês"></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- Backup e Limpeza (último) -->
+      <section class="card backup full-width" id="secBackup">
+
+        <header class="card-header">
+          <div>
+            <h2>Backup e Limpeza</h2>
+            <small>Exportar/Importar e resetar</small>
+          </div>
+          <small class="muted">Ações críticas</small>
+        </header>
+        <div class="card-body">
+          <div class="row two">
+            <div>
+              <label for="importarDados">Importar (cole um JSON exportado)</label>
+              <textarea id="importarDados" placeholder="Cole aqui o JSON..."></textarea>
+              <div class="actions" style="margin-top:12px;">
+                <button type="button" id="importarBtn">Importar</button>
+                <button type="button" class="secondary" id="downloadBackupBtn">Baixar backup JSON</button>
+              </div>
+            </div>
+
+            <div>
+              <label>Reset</label>
+              <div class="empty" style="margin-top:0; padding-top:0;">Vai apagar alunos, livros e empréstimos cadastrados neste navegador.</div>
+              <div class="actions" style="margin-top:12px;">
+                <button type="button" class="danger" id="resetBtn">Apagar tudo</button>
+              </div>
+              <div class="empty" style="margin-top:12px; padding-top:0;">Dica: exporte antes de resetar.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal: Confirmar Reset / Apagar Tudo com Alerta de Backup -->
+  <div class="modal-backdrop" id="modalConfirmarReset" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header" style="background: linear-gradient(180deg, #fef2f2, #fff);">
+        <h3 style="color: var(--danger);">⚠️ Confirmar Exclusão de Todos os Dados</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarReset">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="text-align: center; margin-bottom: 18px;">
+          <div style="font-size: 44px; margin-bottom: 8px;">🚨</div>
+          <h4 style="margin: 0 0 8px; font-size: 17px; font-weight: 900; color: #1f2937;">Atenção: Ação Crítica e Irreversível!</h4>
+          <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+            Você está prestes a apagar permanentemente todos os <strong>alunos</strong>, <strong>livros</strong>, <strong>empréstimos</strong> e <strong>relatórios</strong> cadastrados no sistema.
+          </p>
+        </div>
+
+        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 13px; color: #92400e;">
+          <strong>💡 Recomendação de Segurança:</strong><br/>
+          Deseja fazer o download de um <strong>backup completo em arquivo JSON</strong> antes de realizar a exclusão total?
+        </div>
+
+        <div id="resetStatusCounts" style="font-size: 13px; color: var(--muted); font-weight: 800; text-align: center; margin-bottom: 8px;">
+          <!-- Contagem atual de registros -->
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap;">
+        <button type="button" class="secondary" data-close-modal="#modalConfirmarReset">Cancelar</button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="btnResetSemBackup" class="danger" style="background: #b91c1c;">⚠️ Apagar Sem Backup</button>
+          <button type="button" id="btnResetComBackup" style="background: #15803d;">💾 Fazer Backup e Apagar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Central de Notificações de Prazos -->
+  <div class="modal-backdrop" id="modalNotificacoes" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header">
+        <h3>🔔 Central de Notificações de Prazos</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalNotificacoes">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; flex-wrap: wrap;">
+          <button type="button" class="secondary btn-small notif-tab active" id="tabNotifTodos" data-filter="todos" style="font-weight: 900;">Todos os Alertas (<span id="notifTotalCount">0</span>)</button>
+          <button type="button" class="secondary btn-small notif-tab" id="tabNotifVencidos" data-filter="vencidos" style="color: #991b1b; background: #fee2e2;">⚠️ Vencidos (<span id="notifVencidosCount">0</span>)</button>
+          <button type="button" class="secondary btn-small notif-tab" id="tabNotifBreve" data-filter="breve" style="color: #92400e; background: #fef3c7;">⏳ Vencendo em Breve (<span id="notifBreveCount">0</span>)</button>
+        </div>
+
+        <div id="notifListContainer" class="notif-list">
+          <!-- Itens preenchidos dinamicamente -->
+        </div>
+        <div id="notifEmpty" class="empty" style="display:none; text-align: center; padding: 24px 0;">🎉 Nenhum empréstimo vencido ou com prazo próximo! Tudo em dia.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalNotificacoes">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Leitor QR Code / Código de Barras (Câmera + ISBN) -->
+  <div class="modal-backdrop" id="modalQrScanner" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3 id="qrModalTitle">📷 Leitor de QR Code & Código de Barras (ISBN)</h3>
+        <button type="button" class="modal-close-btn" id="btnFecharScanner">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-scanner-box">
+          <div id="qrReaderElem" style="width: 100%;"></div>
+        </div>
+
+        <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; justify-content: space-between;">
+          <span style="font-size: 12px; color: var(--muted); font-weight: 800;">
+            Aponte a câmera para o QR Code ou código de barras ISBN do livro.
+          </span>
+        </div>
+
+        <div style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px;">
+          <label for="scannerManualInput" style="margin-bottom: 6px;">Ou digite/leia com leitor USB de código de barras:</label>
+          <div style="display: flex; gap: 8px;">
+            <input id="scannerManualInput" placeholder="Ex.: 9788535902778 ou código..." style="flex:1;" />
+            <button type="button" id="scannerManualBuscarBtn" class="secondary btn-small">Buscar Livro</button>
+          </div>
+        </div>
+
+        <div id="scannerFeedback" style="margin-top: 12px; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 800; display: none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" id="btnCancelarScanner">Fechar Scanner</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Gerador de Etiqueta e QR Code -->
+  <div class="modal-backdrop" id="modalQrEtiqueta" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🏷️ Etiqueta com QR Code do Livro</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalQrEtiqueta">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="printableLabel" class="qr-label-card">
+          <div id="qrCodeContainer" class="qr-code-img"></div>
+          <div style="flex: 1;">
+            <div style="font-size: 11px; font-weight: 900; color: var(--primary-dark); text-transform: uppercase; letter-spacing: 0.04em;">BIBLIOTECA ESCOLAR</div>
+            <div id="labelBookTitle" style="font-weight: 1000; font-size: 15px; color: var(--text); margin: 4px 0;">Título do Livro</div>
+            <div id="labelBookAuthor" style="font-size: 12px; color: var(--muted); font-weight: 800; margin-bottom: 6px;">Autor</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span id="labelBookCategory" class="pill" style="font-size: 10px; padding: 4px 8px;">Categoria</span>
+              <span id="labelBookCopies" class="pill" style="font-size: 10px; padding: 4px 8px;">1 exemplar</span>
+            </div>
+          </div>
+        </div>
+        <p style="text-align:center; font-size:12px; color:var(--muted); margin-top:14px; font-weight:700;">
+          Imprima esta etiqueta para colar na lombada ou contracapa do livro. Ao escanear o QR Code pelo sistema, o livro é localizado instantaneamente!
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalQrEtiqueta">Fechar</button>
+        <button type="button" id="btnImprimirEtiqueta">🖨️ Imprimir Etiqueta</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhes do Livro (Prateleira Virtual) -->
+  <div class="modal-backdrop" id="modalDetalhesLivro" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header" id="detalhesHeader">
+        <h3 id="detalhesTituloModal">📖 Detalhes do Livro</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalDetalhesLivro">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="detalhesLivroConteudo">
+          <!-- Preenchido dinamicamente -->
+        </div>
+      </div>
+      <div class="modal-footer" id="detalhesLivroAcoes">
+        <!-- Ações rápidas: Emprestar, Imprimir QR, Editar -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast (mantém id usado pelo JS) -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Vendor libraries (locais) -->
+  <script src="./assets/js/vendor/qrcode.min.js"></script>
+  <script src="./assets/js/vendor/html5-qrcode.min.js"></script>
+
+  <script>
+    // Bloqueio simples de acesso via front-end (para evitar uso acidental sem senha)
+    const LS_AUTH_KEY = 'biblioteca_auth_v1';
+    (function(){
+      try{
+        const raw = localStorage.getItem(LS_AUTH_KEY);
+        const data = raw ? JSON.parse(raw) : null;
+        if(!data || !data.ok) {
+          location.href = './login.html';
+        }
+      }catch{
+        location.href = './login.html';
+      }
+    })();
+  </script>
+
+  <script>
+    // Alterna visibilidade das seções (sem depender do app.js)
+    (function(){
+      const navItems = document.querySelectorAll('.nav-item[data-nav]');
+      const sections = document.querySelectorAll('[data-section]');
+
+      function activate(sectionKey){
+        sections.forEach(s => {
+          s.classList.toggle('active', s.getAttribute('data-section') === sectionKey);
+        });
+
+        // marca nav ativo
+        navItems.forEach(a => {
+          const navKey = a.getAttribute('data-nav');
+          a.classList.toggle('active', navKey === sectionKey);
+        });
+      }
+
+      navItems.forEach(a => {
+        a.addEventListener('click', (e) => {
+          e.preventDefault();
+          const key = a.getAttribute('data-nav');
+          if(!key) return;
+          activate(key);
+        });
+      });
+
+      // inicial
+      activate('dashboard');
+    })();
+  </script>
+
+  <script type="module" src="./assets/js/app.js"></script>
+
+
+</body>
+</html>

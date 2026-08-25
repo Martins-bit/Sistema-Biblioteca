@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Login - Sistema Biblioteca</title>
+  <style>
+    :root{
+      --primary:#22C55E;
+      --primary-dark:#15803D;
+      --bg:#F8FAFC;
+      --card:#FFFFFF;
+      --border:#E5E7EB;
+      --text:#1F2937;
+      --muted:#6B7280;
+      --danger:#ef4444;
+      --danger-dark:#dc2626;
+      --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+      --shadow:0 10px 30px rgba(16,24,40,.10);
+      --radius:16px;
+    }
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      background:var(--bg);
+      color:var(--text);
+      overflow-x:hidden;
+    }
+    .wrap{
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      padding:18px;
+    }
+    .card{
+      width:100%;
+      max-width:420px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow-sm);
+      padding:20px;
+      animation:fadeIn 300ms ease both;
+    }
+    @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+    .brand{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:14px;
+    }
+    .title{
+      font-weight:1000;
+      letter-spacing:-.02em;
+      font-size:18px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .subtitle{color:var(--muted); font-weight:800; font-size:12px; margin-top:2px;}
+
+    input{
+      width:100%;
+      height:46px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:0 12px;
+      background:#fff;
+      color:var(--text);
+      outline:none;
+      font-weight:750;
+      transition:border-color 160ms ease, box-shadow 160ms ease;
+    }
+    input::placeholder{color:var(--muted); font-weight:650;}
+    input:focus{border-color:rgba(34,197,94,.70); box-shadow:0 0 0 4px rgba(34,197,94,.18);}
+
+    label{display:block; font-size:12px; color:var(--muted); font-weight:900; margin:12px 0 8px;}
+
+    button{
+      width:100%;
+      border:0;
+      border-radius:12px;
+      height:46px;
+      padding:0 14px;
+      cursor:pointer;
+      font-weight:950;
+      color:#fff;
+      background:var(--primary);
+      transition:transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+      margin-top:14px;
+    }
+    button:hover{background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 12px 25px rgba(21,128,61,.18);}
+
+    .msg{
+      margin-top:12px;
+      font-weight:900;
+      font-size:13px;
+      color:var(--muted);
+      min-height:18px;
+    }
+    .msg.error{color:var(--danger);}
+
+    .hint{
+      margin-top:12px;
+      font-size:12px;
+      font-weight:800;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .row{display:grid; grid-template-columns:1fr; gap:12px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card" role="form" aria-label="Tela de login">
+      <div class="brand">
+        <div>
+          <div class="title">🔐 <span>Sistema Biblioteca</span></div>
+          <div class="subtitle">Acesso restrito</div>
+        </div>
+      </div>
+
+      <form id="loginForm">
+        <div class="row">
+          <div>
+            <label for="username">Usuário</label>
+            <input id="username" autocomplete="username" placeholder="Ex.: administrador" required />
+          </div>
+          <div>
+            <label for="password">Senha</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+          </div>
+        </div>
+
+        <button type="submit" id="loginBtn">Entrar</button>
+
+        <div class="msg" id="loginMsg"></div>
+
+        <div class="hint">
+          <b>Credenciais padrão:</b><br/>
+          Usuário: <b>admin</b>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    const LS_AUTH_KEY = 'biblioteca_auth_v1';
+
+    const $ = (sel) => document.querySelector(sel);
+
+    function setAuth(){
+      // token simples apenas para bloquear o front-end
+      // (sem servidor: não é 100% seguro contra quem inspeciona, mas evita acesso acidental)
+      localStorage.setItem(LS_AUTH_KEY, JSON.stringify({ ok: true, at: Date.now() }));
+    }
+
+    function isAuth(){
+      try{
+        const raw = localStorage.getItem(LS_AUTH_KEY);
+        if(!raw) return false;
+        const data = JSON.parse(raw);
+        return !!data?.ok;
+      }catch{ return false; }
+    }
+
+    function toastError(msg){
+      const el = $('#loginMsg');
+      el.textContent = msg;
+      el.classList.add('error');
+    }
+
+    // Redireciona se já estiver autenticado
+    if(isAuth()){
+      location.href = './index.html';
+    }
+
+    async function loginUser(username, password) {
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username, password }),
+        });
+
+        const data = await response.json();
+        if (response.ok && data.ok) {
+          setAuth();
+          location.href = './index.html';
+          return;
+        }
+
+        toastError(data.error || 'Usuário ou senha inválidos.');
+      } catch (err) {
+        toastError('Erro ao conectar com o servidor. Tente novamente.');
+      }
+    }
+
+    $('#loginForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const u = ($('#username').value || '').trim();
+      const p = ($('#password').value || '').trim();
+
+      if (!u || !p) {
+        toastError('Preencha usuário e senha.');
+        return;
+      }
+
+      loginUser(u, p);
+    });
+  </script>
+</body>
+</html>
+
