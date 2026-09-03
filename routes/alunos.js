@@ -4,6 +4,30 @@ const router = express.Router();
 const db = require('../db');
 const { normalizarTurma, turmaValida } = require('../services/turmas');
 const { calcularReputacao, calcularReputacaoTodos } = require('../services/reputacao');
+const { verificarSituacao, registrarFimDeBloqueioSeEncerrado } = require('../services/bloqueio');
+
+function situacaoDe(conn, aluno, rep) {
+  registrarFimDeBloqueioSeEncerrado(conn, aluno.id, rep.nota);
+  return verificarSituacao(conn, aluno.id, rep);
+}
+
+// Consulta sem efeito colateral: não cria nem encerra bloqueios
+function verificarSituacaoSomenteLeitura(conn, alunoId, rep) {
+  const hoje = new Date().toISOString().split('T')[0];
+  const ativo = conn.prepare(
+    'SELECT * FROM bloqueios WHERE alunoId = ? AND encerrado = 0 AND dataFim >= ? ORDER BY id DESC LIMIT 1'
+  ).get(alunoId, hoje);
+  if (ativo) {
+    const dias = Math.max(0, Math.ceil((new Date(ativo.dataFim + 'T00:00:00') - new Date(hoje + 'T00:00:00')) / 86400000));
+    return { bloqueado: true, nota: rep.nota, estrelas: rep.estrelas, situacao: 'Bloqueado temporariamente', dataInicio: ativo.dataInicio, dataFim: ativo.dataFim, diasRestantes: dias, motivo: ativo.motivo };
+  }
+  let situacao;
+  if (rep.nota < 3.0) situacao = 'Bloqueado temporariamente';
+  else if (rep.nota >= 4.5) situacao = 'Excelente';
+  else if (rep.nota >= 3.5) situacao = 'Boa';
+  else situacao = 'Regular';
+  return { bloqueado: rep.nota < 3.0, nota: rep.nota, estrelas: rep.estrelas, situacao };
+}
 
 // GET /api/alunos - Listar todos os alunos (com reputação/estrelas calculadas)
 // Query opcional: ?comReputacao=0 para desativar o cálculo
@@ -14,7 +38,10 @@ router.get('/', (req, res) => {
       const alunos = conn.prepare('SELECT * FROM alunos ORDER BY nome').all();
       return res.json(alunos);
     }
-    const alunos = calcularReputacaoTodos(conn);
+    const alunos = calcularReputacaoTodos(conn).map(a => {
+      const sit = situacaoDe(conn, a, a);
+      return { ...a, situacao: sit.situacao, bloqueado: sit.bloqueado, bloqueioFim: sit.dataFim || null, diasRestantes: sit.diasRestantes ?? null };
+    });
     res.json(alunos);
   } catch (error) {
     console.error('Erro ao listar alunos:', error);
@@ -23,6 +50,7 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/alunos/:id/reputacao - Reputação detalhada de um aluno
+// Query opcional: ?criarBloqueio=0 para apenas consultar, sem criar bloqueio
 router.get('/:id/reputacao', (req, res) => {
   try {
     const conn = db();
@@ -31,9 +59,31 @@ router.get('/:id/reputacao', (req, res) => {
       return res.status(404).json({ error: 'Aluno não encontrado' });
     }
     const rep = calcularReputacao(conn, aluno.id);
-    res.json({ aluno: { id: aluno.id, nome: aluno.nome, turma: aluno.turma }, ...rep });
+    const somenteConsulta = req.query.criarBloqueio === '0';
+    const sit = somenteConsulta
+      ? verificarSituacaoSomenteLeitura(conn, aluno.id, rep)
+      : situacaoDe(conn, aluno, rep);
+    res.json({ aluno: { id: aluno.id, nome: aluno.nome, turma: aluno.turma }, ...rep, situacao: sit.situacao, bloqueado: sit.bloqueado, bloqueioFim: sit.dataFim || null, diasRestantes: sit.diasRestantes ?? null });
   } catch (error) {
     console.error('Erro ao calcular reputação:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// GET /api/alunos/:id/historico-avaliacao - Histórico de mudanças da nota e bloqueios
+router.get('/:id/historico-avaliacao', (req, res) => {
+  try {
+    const conn = db();
+    const aluno = conn.prepare('SELECT * FROM alunos WHERE id = ?').get(req.params.id);
+    if (!aluno) {
+      return res.status(404).json({ error: 'Aluno não encontrado' });
+    }
+    const eventos = conn.prepare(
+      'SELECT * FROM historico_avaliacao WHERE alunoId = ? ORDER BY id DESC LIMIT 100'
+    ).all(aluno.id);
+    res.json(eventos);
+  } catch (error) {
+    console.error('Erro ao buscar histórico de avaliação:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });

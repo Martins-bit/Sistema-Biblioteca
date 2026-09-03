@@ -119,6 +119,28 @@ function estadoPiorou(saida, devolucao) {
 
 // ---------------- Estrelas ----------------
 
+// ---------------- Estrelas e situação ----------------
+
+function situacaoAlunoLabel(a) {
+  if (a.bloqueado) return { texto: 'Bloqueado temporariamente', classe: 'situacao-bloqueado' };
+  const n = Number(a.nota) || 0;
+  if (n >= 4.5) return { texto: 'Excelente', classe: 'situacao-excelente' };
+  if (n >= 3.5) return { texto: 'Boa', classe: 'situacao-boa' };
+  return { texto: 'Regular', classe: 'situacao-regular' };
+}
+
+function situacaoBadgeHTML(a) {
+  const s = situacaoAlunoLabel(a);
+  let extra = '';
+  if (a.bloqueado && a.bloqueioFim) {
+    const dias = a.diasRestantes;
+    extra = dias != null && dias > 0
+      ? `<div class="situacao-detalhe">Faltam ${dias} dia(s) para poder realizar um novo empréstimo.</div>`
+      : `<div class="situacao-detalhe">Disponível em ${formatarData(a.bloqueioFim)}.</div>`;
+  }
+  return `<span class="situacao-badge ${s.classe}">${s.texto}</span>${extra}`;
+}
+
 function renderEstrelas(nota, estrelas) {
   const n = Number(nota) || 0;
   const classe = n >= 4.5 ? 'good' : n >= 3 ? 'mid' : 'bad';
@@ -233,7 +255,7 @@ function popularSelectsEmprestimo() {
     const atual = selAluno.value;
     selAluno.innerHTML = '<option value="">Selecione...</option>' +
       state.alunos.map(a =>
-        `<option value="${a.id}">${escapeHtml(a.nome)} — ${escapeHtml(a.turma)}</option>`
+        `<option value="${a.id}">${escapeHtml(a.nome)} — ${escapeHtml(a.turma)}${a.bloqueado ? ' (BLOQUEADO)' : ''}</option>`
       ).join('');
     if (atual && state.alunos.some(a => String(a.id) === String(atual))) selAluno.value = atual;
     if (selAluno.__combobox) selAluno.__combobox.sync();
@@ -251,6 +273,47 @@ function popularSelectsEmprestimo() {
     if (atual && state.livros.some(l => String(l.id) === String(atual))) selLivro.value = atual;
     if (selLivro.__combobox) selLivro.__combobox.sync();
   }
+
+  atualizarSituacaoEmprestimo();
+}
+
+// Exibe a situação do aluno selecionado no formulário de empréstimo
+// e habilita/desabilita o botão de confirmar.
+function atualizarSituacaoEmprestimo() {
+  const selAluno = $('#emprestimoAluno');
+  const box = $('#emprestimoSituacaoAluno');
+  const btn = $('#emprestarBtn');
+  if (!selAluno || !box || !btn) return;
+
+  const aluno = state.alunos.find(a => String(a.id) === String(selAluno.value));
+  if (!aluno) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    btn.disabled = false;
+    return;
+  }
+
+  const s = situacaoAlunoLabel(aluno);
+  const notaFmt = (Number(aluno.nota) || 0).toFixed(1).replace('.', ',');
+  let detalhe = `Situação: <b>${escapeHtml(s.texto)}</b>`;
+  if (aluno.bloqueado && aluno.bloqueioFim) {
+    const dias = aluno.diasRestantes;
+    detalhe = aluno.diasRestantes != null && dias > 0
+      ? `Situação: <b>Bloqueado até ${formatarData(aluno.bloqueioFim)}</b> — faltam ${dias} dia(s) para poder realizar um novo empréstimo.`
+      : `Situação: <b>Bloqueado até ${formatarData(aluno.bloqueioFim)}</b>.`;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = `
+    <b>${escapeHtml(aluno.nome)} — ${escapeHtml(aluno.turma)}</b><br/>
+    Avaliação: <span class="stars small">${escapeHtml(aluno.estrelas || '☆☆☆☆☆')}</span> ${notaFmt}<br/>
+    ${detalhe}
+  `;
+  box.className = 'emprestimo-situacao ' + (aluno.bloqueado ? 'bloqueado' : 'liberado');
+
+  // Bloqueio também no frontend (a regra real está no backend)
+  btn.disabled = !!aluno.bloqueado;
+  btn.title = aluno.bloqueado ? 'Aluno temporariamente bloqueado por avaliação abaixo de 3,0' : '';
 }
 
 async function carregarAlunos() {
@@ -380,7 +443,7 @@ function renderAlunos() {
       <td>${escapeHtml(a.nome)}</td>
       <td><span class="pill">${escapeHtml(a.turma)}</span></td>
       <td>${a.total ?? 0} (${a.ativos ?? 0} ativo(s))</td>
-      <td>${renderEstrelas(a.nota, a.estrelas)}</td>
+      <td>${renderEstrelas(a.nota, a.estrelas)} ${situacaoBadgeHTML(a)}</td>
       <td class="table-actions">
         <div class="inline-actions">
           <button type="button" class="secondary btn-small" data-editar-aluno="${a.id}">✏️ Editar</button>
@@ -1133,6 +1196,14 @@ async function registrarEmprestimo() {
 
   if (!alunoId) { toast('Selecione o aluno.', 'erro'); return; }
   if (!livroId) { toast('Selecione o livro.', 'erro'); return; }
+
+  // Bloqueio também verificado no frontend (o backend recusa de qualquer forma)
+  const alunoSel = state.alunos.find(a => String(a.id) === String(alunoId));
+  if (alunoSel && alunoSel.bloqueado) {
+    const fim = alunoSel.bloqueioFim ? formatarData(alunoSel.bloqueioFim) : 'em breve';
+    toast(`Aluno temporariamente bloqueado. Novo empréstimo disponível em ${fim}.`, 'erro');
+    return;
+  }
 
   const limite = new Date(dataRetirada + 'T00:00:00');
   limite.setDate(limite.getDate() + prazo);
@@ -2076,6 +2147,7 @@ function bindEventos() {
 
   // ----- Empréstimos -----
   $('#emprestarBtn').addEventListener('click', registrarEmprestimo);
+  $('#emprestimoAluno').addEventListener('change', atualizarSituacaoEmprestimo);
   $('#btnAbrirScannerEmprestimo').addEventListener('click', () => abrirScanner('emprestimo'));
   $('#emprestimoBusca').addEventListener('input', (e) => { state.buscaEmprestimo = e.target.value; renderEmprestimos(); });
   $('#emprestimoLimparBusca').addEventListener('click', () => { $('#emprestimoBusca').value = ''; state.buscaEmprestimo = ''; renderEmprestimos(); });

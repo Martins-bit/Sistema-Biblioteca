@@ -24,7 +24,10 @@
     body{
       margin:0;
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-      background:var(--bg);
+      background:
+        radial-gradient(900px 500px at 10% -10%, rgba(34,197,94,.10), transparent 60%),
+        radial-gradient(800px 500px at 110% 110%, rgba(59,130,246,.08), transparent 60%),
+        var(--bg);
       color:var(--text);
       overflow-x:hidden;
     }
@@ -41,171 +44,275 @@
       border:1px solid var(--border);
       border-radius:var(--radius);
       box-shadow:var(--shadow-sm);
-      padding:20px;
+      padding:32px 28px 24px;
       animation:fadeIn 300ms ease both;
     }
     @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
     .brand{
       display:flex;
+      flex-direction:column;
       align-items:center;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:14px;
+      text-align:center;
+      gap:6px;
+      margin-bottom:24px;
+    }
+    .logo{
+      width:56px;height:56px;
+      border-radius:16px;
+      background:linear-gradient(135deg, var(--primary), var(--primary-dark));
+      display:grid;place-items:center;
+      font-size:28px;
+      box-shadow:0 8px 20px rgba(21,128,61,.25);
+      margin-bottom:6px;
     }
     .title{
       font-weight:1000;
       letter-spacing:-.02em;
-      font-size:18px;
-      display:flex;
-      align-items:center;
-      gap:10px;
+      font-size:20px;
     }
-    .subtitle{color:var(--muted); font-weight:800; font-size:12px; margin-top:2px;}
+    .subtitle{color:var(--muted); font-weight:700; font-size:13px;}
 
-    input{
+    label{display:block; font-size:12px; color:var(--muted); font-weight:800; margin:14px 0 6px;}
+
+    .input-wrap{position:relative;}
+    input[type=email],input[type=text],input[type=password]{
       width:100%;
       height:46px;
       border:1px solid var(--border);
       border-radius:12px;
-      padding:0 12px;
+      padding:0 44px 0 14px;
       background:#fff;
       color:var(--text);
       outline:none;
-      font-weight:750;
+      font-weight:600;
+      font-size:14px;
       transition:border-color 160ms ease, box-shadow 160ms ease;
     }
-    input::placeholder{color:var(--muted); font-weight:650;}
-    input:focus{border-color:rgba(34,197,94,.70); box-shadow:0 0 0 4px rgba(34,197,94,.18);}
+    input::placeholder{color:#9CA3AF; font-weight:500;}
+    input:focus{border-color:rgba(34,197,94,.70); box-shadow:0 0 0 4px rgba(34,197,94,.15);}
+    input.erro{border-color:var(--danger); box-shadow:0 0 0 4px rgba(239,68,68,.12);}
 
-    label{display:block; font-size:12px; color:var(--muted); font-weight:900; margin:12px 0 8px;}
+    .toggle-senha{
+      position:absolute;
+      right:8px;top:50%;
+      transform:translateY(-50%);
+      background:none;border:0;
+      cursor:pointer;
+      font-size:16px;
+      padding:6px 8px;
+      border-radius:8px;
+      line-height:1;
+      color:var(--muted);
+    }
+    .toggle-senha:hover{background:#F1F5F9;}
 
-    button{
+    button.entrar{
       width:100%;
       border:0;
       border-radius:12px;
       height:46px;
       padding:0 14px;
       cursor:pointer;
-      font-weight:950;
+      font-weight:800;
+      font-size:14px;
       color:#fff;
       background:var(--primary);
       transition:transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
       display:inline-flex;
       align-items:center;
       justify-content:center;
+      gap:8px;
       user-select:none;
-      margin-top:14px;
+      margin-top:20px;
     }
-    button:hover{background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 12px 25px rgba(21,128,61,.18);}
+    button.entrar:hover{background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 12px 25px rgba(21,128,61,.18);}
+    button.entrar:disabled{opacity:.65; cursor:not-allowed; transform:none; box-shadow:none;}
+
+    .divisor{
+      display:flex;align-items:center;gap:10px;
+      margin:18px 0 4px;
+      color:var(--muted);
+      font-size:11px;font-weight:700;
+      text-transform:uppercase;letter-spacing:.05em;
+    }
+    .divisor::before,.divisor::after{content:'';flex:1;height:1px;background:var(--border);}
+
+    button.google{
+      width:100%;
+      border:1px solid var(--border);
+      border-radius:12px;
+      height:44px;
+      background:#fff;
+      color:var(--text);
+      font-weight:700;
+      font-size:14px;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      transition:background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      margin-top:10px;
+    }
+    button.google:hover{background:#F8FAFC; border-color:#CBD5E1; transform:translateY(-1px);}
+    button.google:disabled{opacity:.55; cursor:not-allowed; transform:none;}
 
     .msg{
-      margin-top:12px;
-      font-weight:900;
+      margin-top:14px;
+      font-weight:700;
       font-size:13px;
       color:var(--muted);
       min-height:18px;
+      text-align:center;
+      border-radius:10px;
+      padding:0 4px;
       transition: color 160ms ease;
     }
-    .msg.error{color:var(--danger);}
-    .msg.success{color:var(--primary-dark);}
+    .msg.error{
+      color:var(--danger-dark);
+      background:rgba(239,68,68,.08);
+      border:1px solid rgba(239,68,68,.25);
+      padding:9px 10px;
+    }
+    .msg.success{
+      color:var(--primary-dark);
+      background:rgba(34,197,94,.10);
+      border:1px solid rgba(34,197,94,.3);
+      padding:9px 10px;
+    }
 
     .hint{
-      margin-top:12px;
+      margin-top:16px;
       font-size:12px;
-      font-weight:800;
+      font-weight:600;
       color:var(--muted);
-      line-height:1.35;
+      line-height:1.5;
+      text-align:center;
     }
-    .row{display:grid; grid-template-columns:1fr; gap:12px;}
+    .hint b{color:var(--text);}
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card" role="form" aria-label="Tela de login">
       <div class="brand">
-        <div>
-          <div class="title">🔐 <span>Sistema Biblioteca</span></div>
-          <div class="subtitle">Acesso restrito</div>
-        </div>
+        <div class="logo">📚</div>
+        <div class="title">Sistema Biblioteca</div>
+        <div class="subtitle">Entre com suas credenciais para acessar</div>
       </div>
 
-      <form id="loginForm">
-        <div class="row">
-          <div>
-            <label for="username">Usuário ou e-mail</label>
-            <input id="username" autocomplete="username" placeholder="Ex.: admin ou admin@biblioteca.com" required />
+      <form id="loginForm" novalidate>
+        <div>
+          <label for="email">E-mail ou usuário</label>
+          <div class="input-wrap">
+            <input id="email" type="text" autocomplete="username" placeholder="admin@biblioteca.local" required />
           </div>
-          <div>
-            <label for="password">Senha</label>
+        </div>
+        <div>
+          <label for="password">Senha</label>
+          <div class="input-wrap">
             <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+            <button type="button" class="toggle-senha" id="toggleSenha" title="Mostrar / ocultar senha" aria-label="Mostrar ou ocultar senha">👁️</button>
           </div>
         </div>
 
-        <button type="submit" id="loginBtn">Entrar</button>
+        <button type="submit" id="loginBtn" class="entrar">Entrar</button>
 
         <div class="msg" id="loginMsg"></div>
 
+        <div class="divisor">ou</div>
+
+        <button type="button" id="googleBtn" class="google">
+          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+            <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
+            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+            <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
+            <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
+          </svg>
+          Continuar com Google
+        </button>
+
         <div class="hint">
-          <b>Credenciais padrão:</b><br/>
-          Usuário: <b>admin</b> &nbsp;|&nbsp; Senha: <b>1234</b>
+          <b>Credenciais padrão:</b> admin / 1234<br/>
+          ou e-mail: <b>admin@biblioteca.local</b> / 1234
         </div>
       </form>
-
     </div>
   </div>
 
   <script>
     const LS_AUTH_KEY = 'biblioteca_auth_v1';
-
     const $ = (sel) => document.querySelector(sel);
 
     function setAuth(userData){
-      const authObj = {
-        ok: true,
-        at: Date.now(),
-        user: userData || { username: 'admin' }
-      };
-      localStorage.setItem(LS_AUTH_KEY, JSON.stringify(authObj));
+      localStorage.setItem(LS_AUTH_KEY, JSON.stringify({ ok: true, at: Date.now(), user: userData || { username: 'admin' } }));
     }
-
     function isAuth(){
       try{
         const raw = localStorage.getItem(LS_AUTH_KEY);
         if(!raw) return false;
-        const data = JSON.parse(raw);
-        return !!data?.ok;
+        return !!JSON.parse(raw)?.ok;
       }catch{ return false; }
     }
-
-    function toastError(msg){
+    function setMsg(msg, tipo){
       const el = $('#loginMsg');
-      el.textContent = msg;
-      el.classList.remove('success');
-      el.classList.add('error');
+      el.textContent = msg || '';
+      el.classList.remove('error','success');
+      if (tipo) el.classList.add(tipo);
     }
 
-    function toastSuccess(msg){
-      const el = $('#loginMsg');
-      el.textContent = msg;
-      el.classList.remove('error');
-      el.classList.add('success');
-    }
+    // Mensagens de erro vindas do callback do Google (?erro=...)
+    (function(){
+      const p = new URLSearchParams(location.search);
+      const mapa = {
+        'google-cancelado': 'Login com Google cancelado.',
+        'google-nao-configurado': 'Login com Google ainda não foi configurado no servidor.',
+        'google-token': 'Falha ao autenticar com o Google. Tente novamente.',
+        'google-perfil': 'Não foi possível obter seu e-mail do Google.',
+        'google-falhou': 'Falha inesperada no login com Google.'
+      };
+      const erro = p.get('erro');
+      if (erro && mapa[erro]) setMsg(mapa[erro], 'error');
+    })();
 
     // Redireciona se já estiver autenticado
     if(isAuth()){
       location.href = './index.html';
     }
 
-    async function tryAuthRequest(url, username, password) {
+    // Mostrar / ocultar senha
+    $('#toggleSenha').addEventListener('click', () => {
+      const inp = $('#password');
+      const visivel = inp.type === 'text';
+      inp.type = visivel ? 'password' : 'text';
+      $('#toggleSenha').textContent = visivel ? '👁️' : '🙈';
+    });
+
+    // Verifica se o login Google está habilitado no servidor
+    (async function(){
+      try {
+        const res = await fetch('/api/auth/google/status');
+        if (res.ok) {
+          const { habilitado } = await res.json();
+          $('#googleBtn').disabled = !habilitado;
+          $('#googleBtn').title = habilitado ? '' : 'Login com Google não configurado no servidor';
+        }
+      } catch (e) { /* servidor indisponível */ }
+    })();
+
+    $('#googleBtn').addEventListener('click', () => {
+      setMsg('Redirecionando para o Google...', 'success');
+      window.location.href = '/api/auth/google';
+    });
+
+    async function tryAuthRequest(url, identificador, password) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 3500);
       try {
         const res = await fetch(url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ username, password }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: identificador, password }),
           signal: controller.signal,
           credentials: 'include'
         });
@@ -217,28 +324,24 @@
       }
     }
 
-    async function loginUser(username, password) {
+    async function loginUser(identificador, password) {
       const btn = $('#loginBtn');
-      const originalText = btn.innerHTML;
+      const originalText = btn.textContent;
       btn.disabled = true;
       btn.innerHTML = 'Entrando...';
-      $('#loginMsg').textContent = '';
-      $('#loginMsg').className = 'msg';
+      setMsg('');
 
       try {
         let response = null;
-
-        // 1. Tenta endpoint relativo (quando servido via Express / HTTP)
         if (location.protocol !== 'file:') {
-          response = await tryAuthRequest('/api/auth/login', username, password);
+          response = await tryAuthRequest('/api/auth/login', identificador, password);
         }
 
-        // 2. Se falhou ou a resposta não veio do Express (ex: Live Server na porta 3000, 5500 ou 8080)
         if (!response || response.status === 404 || response.status === 426) {
           const possiblePorts = [3000, 3001, 8080, 5000];
           for (const port of possiblePorts) {
             if (location.port !== String(port)) {
-              response = await tryAuthRequest(`http://localhost:${port}/api/auth/login`, username, password);
+              response = await tryAuthRequest(`http://localhost:${port}/api/auth/login`, identificador, password);
               if (response && response.status !== 404 && response.status !== 426) break;
             }
           }
@@ -246,55 +349,44 @@
 
         if (response) {
           let data = null;
-          try {
-            data = await response.json();
-          } catch(err) {
-            data = null;
-          }
+          try { data = await response.json(); } catch(err) { data = null; }
 
           if (response.ok && data && data.ok) {
-            toastSuccess('Login realizado com sucesso! Redirecionando...');
+            setMsg('Login realizado com sucesso! Redirecionando...', 'success');
             setAuth(data.user);
-            location.href = './index.html?_=' + Date.now(); // evita HTML/JS em cache
+            location.href = './index.html?_=' + Date.now();
             return;
           } else if (response.status === 400 || response.status === 401 || (data && data.error)) {
-            toastError(data?.error || 'Usuário ou senha inválidos.');
-            btn.disabled = false;
-            btn.innerHTML = originalText;
+            setMsg(data?.error || 'Usuário ou senha inválidos.', 'error');
             return;
           }
         }
 
-        // 3. Sem fallback local inseguro — se o backend está inacessível, tenta um último endpoint alternativo antes de falhar.
-        // (portas alternativas já foram tentadas acima)
-        toastError('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.');
+        setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
       } catch (err) {
-        toastError('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.');
+        setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = originalText;
+        btn.textContent = originalText;
       }
     }
 
     $('#loginForm').addEventListener('submit', (event) => {
       event.preventDefault();
-      const u = ($('#username').value || '').trim();
-      const p = ($('#password').value || '').trim();
+      const u = ($('#email').value || '').trim();
+      const p = $('#password').value || '';
 
-      if (!u || !p) {
-        toastError('Preencha usuário e senha.');
-        return;
-      }
+      $('#email').classList.remove('erro');
+      $('#password').classList.remove('erro');
 
-      // Se o usuário digitar um e-mail, aceitamos como login (mesma credencial cadastrada).
-      if (u.includes('@')) {
-        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u);
-        if (!emailOk) { toastError('E-mail inválido. Verifique e tente novamente.'); return; }
+      if (!u) { setMsg('Informe o e-mail ou usuário.', 'error'); $('#email').classList.add('erro'); return; }
+      if (u.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u)) {
+        setMsg('E-mail inválido. Verifique e tente novamente.', 'error'); $('#email').classList.add('erro'); return;
       }
+      if (!p) { setMsg('Informe a senha.', 'error'); $('#password').classList.add('erro'); return; }
 
       loginUser(u, p);
     });
   </script>
 </body>
 </html>
-

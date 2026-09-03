@@ -1,4 +1,4 @@
-import { createRequire } from 'module';
+﻿import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 
 const path = require('path');
@@ -93,9 +93,9 @@ const server = app.listen(PORT, async () => {
     testAssert(await page.title() === 'Login - Sistema Biblioteca', 'Página de Login carregada');
 
     // 2. Fazer Login
-    await page.fill('#username', 'admin');
+    await page.fill('#email', 'admin@biblioteca.local');
     await page.fill('#password', '1234');
-    await page.click('#loginBtn');
+    await page.click('button[type="submit"]');
     await page.waitForNavigation({ waitUntil: 'networkidle' });
     await page.waitForTimeout(600);
     testAssert(page.url().includes('index.html'), 'Redirecionado para index.html após autenticação');
@@ -155,8 +155,11 @@ const server = app.listen(PORT, async () => {
     const optLivro = await page.$eval('#emprestimoLivro', el => el.options[1]?.value);
     const optAluno = await page.$eval('#emprestimoAluno', el => el.options[1]?.value);
     if (optLivro && optAluno) {
-      await page.selectOption('#emprestimoLivro', optLivro);
-      await page.selectOption('#emprestimoAluno', optAluno);
+      // Os selects de aluno/livro são comboboxes customizados (select nativo escondido).
+      // Setamos o valor e disparamos 'change' diretamente, como o componente faz.
+      const setarSelect = (sel, val) => page.$eval(sel, (el, v) => { el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); }, val);
+      await setarSelect('#emprestimoLivro', optLivro);
+      await setarSelect('#emprestimoAluno', optAluno);
       await page.selectOption('#emprestimoPrazo', '14');
       await page.click('#emprestarBtn');
       await page.waitForTimeout(400);
@@ -165,9 +168,9 @@ const server = app.listen(PORT, async () => {
     }
 
     // 8. Testar Prateleira Virtual (Estante 3D, Catálogo, Agrupamento, Ordenação)
-    await page.click('.nav-item[data-nav="prateleira"]');
+    await page.click('.nav-item[data-nav="estante"]');
     await page.waitForTimeout(400);
-    const isPrateleiraVisivel = await page.$eval('#secPrateleira', el => el.classList.contains('active') || !el.classList.contains('hidden'));
+    const isPrateleiraVisivel = await page.$eval('#secEstante', el => el.classList.contains('active') || !el.classList.contains('hidden'));
     testAssert(isPrateleiraVisivel, 'Seção Prateleira Virtual carregada com sucesso');
 
     const spinesCount = await page.$$eval('.shelf-book-spine', el => el.length);
@@ -180,7 +183,7 @@ const server = app.listen(PORT, async () => {
     testAssert(cardsCount > 0, `Modo Catálogo exibiu ${cardsCount} cards de livros`);
 
     // Agrupar por Autor
-    await page.selectOption('#shelfGroupBy', 'autor');
+    await page.selectOption('#estanteGroupBy', 'autor');
     await page.waitForTimeout(300);
     const racksCount = await page.$$eval('.shelf-rack', el => el.length);
     testAssert(racksCount > 0, `Prateleiras organizadas dinamicamente por autor (${racksCount} prateleiras)`);
@@ -257,3 +260,4 @@ const server = app.listen(PORT, async () => {
     server.close(() => process.exit(1));
   }
 });
+

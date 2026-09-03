@@ -3,7 +3,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const { ESTADOS_CONSERVACAO } = require('../services/reputacao');
+const { ESTADOS_CONSERVACAO, calcularReputacao, notaParaEstrelas } = require('../services/reputacao');
+const { verificarSituacao, registrarHistorico, registrarFimDeBloqueioSeEncerrado } = require('../services/bloqueio');
 
 const SELECT_EMPRESTIMO_COMPLETO = `
   SELECT e.*,
@@ -95,6 +96,19 @@ router.post('/', (req, res) => {
       });
     }
 
+    // ==== REGRA DE BLOQUEIO: aluno com avaliação < 3,0 fica impedido de novos empréstimos ====
+    // Validada aqui no backend — mesmo chamando a API diretamente, o empréstimo é recusado.
+    const rep = calcularReputacao(conn, alunoId);
+    registrarFimDeBloqueioSeEncerrado(conn, alunoId, rep.nota);
+    const situacao = verificarSituacao(conn, alunoId, rep);
+    if (situacao.bloqueado) {
+      const dataFimFmt = String(situacao.dataFim).split('-').reverse().join('/');
+      return res.status(403).json({
+        error: `Aluno temporariamente bloqueado. Avaliação: ${rep.estrelas} ${rep.nota.toFixed(1).replace('.', ',')}. Novo empréstimo disponível em ${dataFimFmt} (faltam ${situacao.diasRestantes} dia(s)).`,
+        bloqueio: situacao
+      });
+    }
+
     const result = conn.prepare(`
       INSERT INTO emprestimos (alunoId, livroId, dataRetirada, dataLimite, devolvido,
                                estadoSaida, obsSaida)
@@ -142,6 +156,8 @@ router.put('/:id', (req, res) => {
       return res.status(400).json({ error: 'Este empréstimo já foi devolvido' });
     }
 
+    const notaAnterior = calcularReputacao(conn, emprestimo.alunoId).nota;
+
     conn.prepare(`
       UPDATE emprestimos
       SET devolvido = 1,
@@ -156,12 +172,48 @@ router.put('/:id', (req, res) => {
       id
     );
 
+    // ==== Histórico da avaliação: explica por que a nota mudou ====
+    const repDepois = calcularReputacao(conn, emprestimo.alunoId);
+    registrarFimDeBloqueioSeEncerrado(conn, emprestimo.alunoId, repDepois.nota);
+
+    const limite = emprestimo.dataLimite ? String(emprestimo.dataLimite).slice(0, 10) : null;
+    const devolucao = String(dataDevolucao || new Date().toISOString().split('T')[0]).slice(0, 10);
+    const fmt = (iso) => iso.split('-').reverse().join('/');
+
+    if (limite) {
+      if (devolucao <= limite) {
+        registrarHistorico(conn, emprestimo.alunoId, 'devolucao_prazo',
+          `Devolvido ${devolucao < limite ? 'antes do prazo' : 'no prazo'} (limite ${fmt(limite)}).`, notaAnterior, repDepois.nota);
+      } else {
+        const dias = Math.ceil((new Date(devolucao + 'T00:00:00') - new Date(limite + 'T00:00:00')) / 86400000);
+        registrarHistorico(conn, emprestimo.alunoId, 'devolucao_atrasada',
+          `Atraso de ${dias} dia(s) (limite ${fmt(limite)}, devolvido em ${fmt(devolucao)}).`, notaAnterior, repDepois.nota);
+      }
+    }
+
+    if (checkEstado.valor && emprestimo.estadoSaida) {
+      const ordem = { 'Danificado': 1, 'Regular': 2, 'Bom': 3, 'Ótimo': 4, 'Novo': 5 };
+      if (ordem[checkEstado.valor] < ordem[emprestimo.estadoSaida]) {
+        registrarHistorico(conn, emprestimo.alunoId, 'estado_piorou',
+          `Estado do livro piorou: saída "${emprestimo.estadoSaida}" → devolução "${checkEstado.valor}".`,
+          notaAnterior, repDepois.nota);
+      } else {
+        registrarHistorico(conn, emprestimo.alunoId, 'estado_ok',
+          `Livro devolvido no mesmo estado da saída ("${checkEstado.valor}").`, notaAnterior, repDepois.nota);
+      }
+    }
+    registrarHistorico(conn, emprestimo.alunoId, 'nota_atualizada',
+      `Nota atualizada para ${repDepois.nota.toFixed(1).replace('.', ',')} ${repDepois.estrelas}.`, notaAnterior, repDepois.nota);
+
+    // Verifica se a devolução derrubou a nota abaixo de 3,0 e inicia novo bloqueio se necessário
+    const situacao = verificarSituacao(conn, emprestimo.alunoId, repDepois);
+
     const emprestimoAtualizado = conn.prepare(`
       ${SELECT_EMPRESTIMO_COMPLETO}
       WHERE e.id = ?
     `).get(id);
 
-    res.json(emprestimoAtualizado);
+    res.json({ ...emprestimoAtualizado, situacaoAluno: situacao });
   } catch (error) {
     console.error('Erro ao devolver livro:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });

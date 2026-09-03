@@ -88,6 +88,40 @@ try {
     db.exec("ALTER TABLE livros ADD COLUMN capaUrl TEXT");
   } catch (e) { /* Coluna já existe */ }
 
+  // ---- Migration: e-mail do usuário (login por e-mail) ----
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+  } catch (e) { /* Coluna já existe */ }
+
+  // ---- Tabela de bloqueios de alunos (nota < 3,0 => bloqueio de 21 dias) ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bloqueios (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alunoId INTEGER NOT NULL,
+      dataInicio DATE NOT NULL,
+      dataFim DATE NOT NULL,
+      motivo TEXT NOT NULL,
+      notaNoBloqueio REAL NOT NULL,
+      encerrado BOOLEAN NOT NULL DEFAULT 0,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (alunoId) REFERENCES alunos(id)
+    )
+  `);
+
+  // ---- Histórico da avaliação (por que a nota mudou / bloqueios) ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS historico_avaliacao (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alunoId INTEGER NOT NULL,
+      tipo TEXT NOT NULL,
+      descricao TEXT NOT NULL,
+      notaAnterior REAL,
+      notaNova REAL,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (alunoId) REFERENCES alunos(id)
+    )
+  `);
+
   // Criar tabela de relatórios/notificações
   db.exec(`
     CREATE TABLE IF NOT EXISTS relatorios (
@@ -113,12 +147,18 @@ try {
 
     // Inserir usuário admin
     const insertAdmin = db.prepare(
-      'INSERT INTO users (username, password_hash) VALUES (?, ?)'
-    ).run(adminUsername, passwordHash);
+      'INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)'
+    ).run(adminUsername, passwordHash, 'admin@biblioteca.local');
 
     console.log(`Usuário admin criado com ID: ${insertAdmin.lastInsertRowid}`);
   } else {
     console.log('Usuário admin já existe.');
+    // Garante que o admin tenha um e-mail cadastrado (migration para bases antigas)
+    const adminRow = db.prepare('SELECT id, email FROM users WHERE username = ?').get(adminUsername);
+    if (adminRow && !adminRow.email) {
+      db.prepare('UPDATE users SET email = ? WHERE id = ?').run('admin@biblioteca.local', adminRow.id);
+      console.log('E-mail padrão vinculado ao admin: admin@biblioteca.local');
+    }
   }
 
   // Fechar conexão (em uma aplicação real, você manteria a conexão aberta)
