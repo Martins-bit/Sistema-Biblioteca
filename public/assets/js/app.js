@@ -1,1948 +1,2284 @@
-import { LS_KEYS, load, save, getBackup, setFromBackup } from './storage.js';
-import {
-  $, $$, uid, normalize, toast, escapeHtml, escapeHtmlAttr,
-  openModal, closeModal, parseDateToLocal, formatDateLocal,
-  addDaysToDate, getTodayDateStr, getLoanStatus, getCategoryTheme, CATEGORY_THEMES
-} from './ui.js';
+// ============================================================
+// app.js - Lógica completa do Sistema da Biblioteca
+// Frontend consumindo a API real (backend Express + SQLite).
+// ============================================================
 
-const LS_AUTH_KEY = 'biblioteca_auth_v1';
+import { criarCombobox, syncComboboxes } from './combobox.js?v=3';
+
+// ---------------- Helpers básicos ----------------
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+function escapeHtml(str) {
+  const AMP = '&' + 'amp;';
+  const LT = '&' + 'lt;';
+  const GT = '&' + 'gt;';
+  const QUOT = '&' + 'quot;';
+  return String(str ?? '')
+    .replace(/&/g, AMP)
+    .replace(/</g, LT)
+    .replace(/>/g, GT)
+    .replace(/"/g, QUOT)
+    .replace(/'/g, '&#039;');
+}
+
+function hojeISO() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function formatarData(iso) {
+  if (!iso) return '—';
+  const d = new Date(String(iso).slice(0, 10) + 'T00:00:00');
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('pt-BR');
+}
+
+function toast(msg, tipo = 'ok') {
+  const el = $('#toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.borderColor = tipo === 'erro' ? '#ef4444' : tipo === 'aviso' ? '#f59e0b' : 'rgba(229,231,235,0.5)';
+  clearTimeout(el.__timer);
+  el.__timer = setTimeout(() => { el.style.display = 'none'; }, 3200);
+}
+
+function abrirModal(sel) {
+  const m = $(sel);
+  if (m) m.classList.add('show');
+}
+
+function fecharModal(sel) {
+  const m = $(sel);
+  if (m) m.classList.remove('show');
+}
+
+// Fecha modais pelos botões [data-close-modal]
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-close-modal]');
+  if (btn) {
+    const sel = btn.getAttribute('data-close-modal');
+    fecharModal(sel);
+  }
+});
+
+// ---------------- API ----------------
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    ...options,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* resposta sem JSON */ }
+  if (!res.ok) {
+    const msg = (data && data.error) ? data.error : `Erro ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+// ---------------- Estado global ----------------
 
 const state = {
+  turmas: [],
   alunos: [],
   livros: [],
   emprestimos: [],
-  relatorios: [],
+  dashboard: null,
+  filtroEmprestimos: 'todos',
+  buscaAluno: '',
+  buscaLivro: '',
+  buscaEmprestimo: '',
+  ordemLivros: 'alfabetica-asc',
+  shelf: { groupBy: 'categoria', sortBy: 'titulo-asc', categoria: '', status: '', busca: '' },
+  shelfView: 'spines', // 'spines' = estante de madeira | 'grid' = catálogo de cards
+  rankingTab: 'alunos',
+  relatorioAtual: null, // dados do último relatório gerado (para CSV/impressão)
+  devolucaoEmprestimoId: null,
+  editandoAlunoId: null,
+  editandoLivroId: null,
+  scannerContexto: null, // 'livro' | 'emprestimo'
+  dedPreview: []
 };
 
-// Configurações e estados da Prateleira Virtual e filtros
-let shelfState = {
-  groupBy: 'categoria', // 'categoria', 'autor', 'disponibilidade', 'nenhum'
-  sortBy: 'titulo-asc', // 'titulo-asc', 'titulo-desc', 'autor-asc', 'acervo-desc', 'recentes', 'populares'
-  filterCategory: '',
-  filterStatus: '', // '', 'disponivel', 'esgotado'
-  search: '',
-  viewMode: 'spines' // 'spines' (Estante 3D) ou 'grid' (Catálogo)
-};
+// ---------------- Constantes de conservação ----------------
 
-let activeEmpFilter = 'todos'; // 'todos', 'vencidos', 'vencendo', 'no_prazo', 'devolvidos'
-let activeNotifFilter = 'todos'; // 'todos', 'vencidos', 'breve'
-let html5QrCodeScanner = null;
-let currentScannerTarget = 'livro'; // 'livro' ou 'emprestimo'
+const NIVEL_CONSERVACAO = { 'Novo': 5, 'Ótimo': 4, 'Bom': 3, 'Regular': 2, 'Danificado': 1 };
+const ESTADOS_CONSERVACAO = Object.keys(NIVEL_CONSERVACAO);
 
-// Controla se um formulário está em modo de edição (guarda o id do registro)
-let editingLivroId = null;
-let editingAlunoId = null;
-
-function formatarDataHoraExtenso(date = new Date()) {
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mo = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `às ${hh}:${mm} de ${dd}/${mo}/${yyyy}`;
+function estadoPiorou(saida, devolucao) {
+  const s = NIVEL_CONSERVACAO[saida];
+  const d = NIVEL_CONSERVACAO[devolucao];
+  if (!s || !d) return false;
+  return d < s;
 }
 
-function addRelatorio(mensagem) {
-  state.relatorios = state.relatorios || [];
-  state.relatorios.unshift({ id: uid(), mensagem, criadoEm: new Date().toISOString() });
-  save(LS_KEYS.relatorios, state.relatorios);
-  renderRelatorios();
-  renderRelatorioResumo();
+// ---------------- Estrelas ----------------
+
+function renderEstrelas(nota, estrelas) {
+  const n = Number(nota) || 0;
+  const classe = n >= 4.5 ? 'good' : n >= 3 ? 'mid' : 'bad';
+  const notaFmt = n.toFixed(1).replace('.', ',');
+  return `<span class="stars small">${escapeHtml(estrelas || '☆☆☆☆☆')}</span><span class="stars-note ${classe}">${notaFmt}</span>`;
 }
 
-function ensureSelectOptions() {
-  const elAluno = $('#emprestimoAluno');
-  const elLivro = $('#emprestimoLivro');
-  if (!elAluno || !elLivro) return;
+// ---------------- Capas ----------------
 
-  const currentAlunoVal = elAluno.value;
-  const currentLivroVal = elLivro.value;
+const CORES_CAPA = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#14b8a6'];
 
-  elAluno.innerHTML = ['<option value="">Selecione...</option>']
-    .concat(state.alunos.map(a => `<option value="${escapeHtmlAttr(a.id)}">${escapeHtml(a.nome)} (${escapeHtml(a.turma)})</option>`))
-    .join('');
-
-  elLivro.innerHTML = ['<option value="">Selecione...</option>']
-    .concat(state.livros.map(l => {
-      const disp = getDisponiveisParaLivro(l);
-      const dispText = disp > 0 ? `(${disp} disponível${disp === 1 ? '' : 'is'})` : `(Esgotado)`;
-      return `<option value="${escapeHtmlAttr(l.id)}">${escapeHtml(l.titulo)} - ${escapeHtml(l.autor)} ${dispText}</option>`;
-    }))
-    .join('');
-
-  if (currentAlunoVal) elAluno.value = currentAlunoVal;
-  if (currentLivroVal) elLivro.value = currentLivroVal;
+function corCapa(titulo) {
+  let h = 0;
+  const s = String(titulo || '');
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return CORES_CAPA[h % CORES_CAPA.length];
 }
 
-function getLoanAlerts() {
-  const ativos = (state.emprestimos || []).filter(e => !e.devolvido);
-  const vencidos = [];
-  const vencendoBreve = [];
-  const noPrazo = [];
-
-  ativos.forEach(e => {
-    const info = getLoanStatus(e);
-    if (info.status === 'vencido') {
-      vencidos.push({ ...e, info });
-    } else if (['vence_hoje', 'vencendo_amanha', 'vencendo_breve'].includes(info.status)) {
-      vencendoBreve.push({ ...e, info });
-    } else {
-      noPrazo.push({ ...e, info });
-    }
-  });
-
-  return {
-    vencidos,
-    vencendoBreve,
-    noPrazo,
-    totalAlertas: vencidos.length + vencendoBreve.length
-  };
+function capaPlaceholderHTML(titulo, classe = 'cover-placeholder') {
+  return `<div class="${classe}" style="background: linear-gradient(135deg, ${corCapa(titulo)}, ${corCapa(titulo)}cc);">📖</div>`;
 }
 
-function renderStats() {
-  const statLivros = $('#statLivros');
-  const statAlunos = $('#statAlunos');
-  const statEmpAtivos = $('#statEmprestimosAtivos');
-  const statEmpVencidos = $('#statEmprestimosVencidos');
-  const livrosCountSmall = $('#livrosCountSmall');
-  const alunosCountSmall = $('#alunosCountSmall');
-
-  const livrosCount = Number(state.livros?.length || 0);
-  const alunosCount = Number(state.alunos?.length || 0);
-  const ativos = (state.emprestimos || []).filter(e => !e.devolvido).length;
-  const alerts = getLoanAlerts();
-
-  if (statLivros) statLivros.textContent = String(livrosCount);
-  if (statAlunos) statAlunos.textContent = String(alunosCount);
-  if (statEmpAtivos) statEmpAtivos.textContent = String(ativos);
-  if (statEmpVencidos) statEmpVencidos.textContent = String(alerts.vencidos.length);
-  if (livrosCountSmall) livrosCountSmall.textContent = `${livrosCount} livro${livrosCount === 1 ? '' : 's'}`;
-  if (alunosCountSmall) alunosCountSmall.textContent = `${alunosCount} aluno${alunosCount === 1 ? '' : 's'}`;
+function capaThumbHTML(livro) {
+  if (livro.capaUrl) {
+    return `<img class="cover-thumb" src="${escapeHtml(livro.capaUrl)}" alt="Capa de ${escapeHtml(livro.titulo)}"
+      onerror="this.outerHTML='${capaPlaceholderHTML(livro.titulo).replace(/'/g, '&#39;')}'" />`;
+  }
+  return capaPlaceholderHTML(livro.titulo);
 }
 
-function renderLivrosDisponiveisSmall() {
-  const el = $('#livrosDisponiveisSmall');
-  if (!el) return;
+// ---------------- Status de empréstimo ----------------
 
-  const totalDisponiveis = (state.livros || []).reduce((acc, l) => {
-    return acc + getDisponiveisParaLivro(l);
-  }, 0);
-
-  el.textContent = `${Number(totalDisponiveis || 0)} disponíveis`;
+function statusEmprestimo(e) {
+  const hoje = hojeISO();
+  if (e.devolvido) {
+    const atrasada = e.dataLimite && e.dataDevolucao && e.dataDevolucao > e.dataLimite;
+    return { chave: 'devolvido', label: atrasada ? 'Devolvido (atrasado)' : 'Devolvido', pill: 'badge-returned' };
+  }
+  if (e.dataLimite && e.dataLimite < hoje) {
+    return { chave: 'vencido', label: 'Vencido', pill: 'badge-overdue' };
+  }
+  if (e.dataLimite) {
+    const limite = new Date(e.dataLimite + 'T00:00:00');
+    const tresDias = new Date(); tresDias.setDate(tresDias.getDate() + 3);
+    if (limite <= tresDias) return { chave: 'vencendo', label: 'Vence em breve', pill: 'badge-warning' };
+    return { chave: 'no_prazo', label: 'No prazo', pill: 'badge-ok' };
+  }
+  return { chave: 'no_prazo', label: 'Ativo', pill: 'badge-ok' };
 }
 
-
-function getAtivosPorLivro(livroId) {
-  return (state.emprestimos || []).filter(e => {
-    return !e.devolvido && String(e.livroId) === String(livroId);
-  }).length;
+function pillStatus(e) {
+  const st = statusEmprestimo(e);
+  return `<span class="status-pill ${st.pill}">${st.label}</span>`;
 }
 
-function getAtivosPorAluno(alunoId) {
-  return (state.emprestimos || []).filter(e => {
-    return !e.devolvido && String(e.alunoId) === String(alunoId);
-  }).length;
-}
-
-function getDisponiveisParaLivro(livro) {
-  const acervo = Number(livro?.acervo || 0);
-  const ativos = getAtivosPorLivro(livro?.id);
-  return Math.max(0, acervo - ativos);
-}
-
-function renderLivrosTable() {
-  const body = $('#livrosBody');
-  const empty = $('#livrosEmpty');
-  if (!body) return;
-
-  const term = normalize($('#livroBusca')?.value);
-
-  const livros = (state.livros || []).filter(l => {
-    if (!term) return true;
-    return normalize(`${l.titulo} ${l.autor} ${l.categoria}`).includes(term);
-  });
-
-  body.innerHTML = '';
-  if (!livros.length) {
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  livros.forEach(l => {
-    const tr = document.createElement('tr');
-    const disponiveis = getDisponiveisParaLivro(l);
-
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(l.titulo)}</strong></td>
-      <td>${escapeHtml(l.autor)}</td>
-      <td><span class="pill">${escapeHtml(l.categoria)}</span></td>
-      <td><strong>${Number(disponiveis)}</strong> / ${Number(l.acervo || 1)}</td>
-      <td style="text-align:right;">
-        <div class="inline-actions">
-          <button type="button" class="secondary btn-small" data-action="qr" data-id="${escapeHtmlAttr(l.id)}" title="Gerar Etiqueta QR">🏷️ QR</button>
-          <button type="button" class="secondary btn-small" data-action="editar" data-id="${escapeHtmlAttr(l.id)}">Editar</button>
-          <button type="button" class="danger btn-small" data-action="apagar" data-id="${escapeHtmlAttr(l.id)}">Apagar</button>
-        </div>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function renderAlunosTable() {
-  const body = $('#alunosBody');
-  const empty = $('#alunosEmpty');
-  if (!body) return;
-
-  const term = normalize($('#alunoBusca')?.value);
-
-  const alunos = (state.alunos || []).filter(a => {
-    if (!term) return true;
-    return normalize(`${a.nome} ${a.turma}`).includes(term);
-  });
-
-  body.innerHTML = '';
-  if (!alunos.length) {
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  alunos.forEach(a => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${escapeHtml(a.nome)}</td>
-      <td>${escapeHtml(a.turma)}</td>
-      <td style="text-align:right;">
-        <div class="inline-actions">
-          <button type="button" class="secondary btn-small" data-action="editar" data-id="${escapeHtmlAttr(a.id)}">Editar</button>
-          <button type="button" class="danger btn-small" data-action="apagar" data-id="${escapeHtmlAttr(a.id)}">Apagar</button>
-        </div>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function resetLivroFormUI() {
-  const form = $('#livroForm');
-  const submitBtn = form?.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = 'Cadastrar livro';
-  const cancelBtn = $('#livroCancelarEdicaoBtn');
-  cancelBtn?.remove();
-}
-
-function iniciarEdicaoLivro(id) {
-  const l = (state.livros || []).find(x => String(x.id) === String(id));
-  if (!l) return;
-
-  const form = $('#livroForm');
-  if (!form) return;
-
-  $('#livroTitulo').value = l.titulo;
-  $('#livroAutor').value = l.autor;
-  $('#livroCategoria').value = l.categoria;
-  $('#livroAcervo').value = l.acervo;
-
-  editingLivroId = l.id;
-
-  const submitBtn = form.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = 'Salvar alterações';
-
-  if (!$('#livroCancelarEdicaoBtn') && submitBtn) {
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'secondary';
-    cancelBtn.id = 'livroCancelarEdicaoBtn';
-    cancelBtn.textContent = 'Cancelar edição';
-    cancelBtn.addEventListener('click', () => {
-      editingLivroId = null;
-      resetLivroFormUI();
-      form.reset?.();
-    });
-    submitBtn.insertAdjacentElement('afterend', cancelBtn);
-  }
-
-  form.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-}
-
-function apagarLivro(id) {
-  const l = (state.livros || []).find(x => String(x.id) === String(id));
-  if (!l) return;
-
-  const ativos = getAtivosPorLivro(l.id);
-  if (ativos > 0) {
-    toast(`Não é possível apagar "${l.titulo}": existe empréstimo ativo para este livro.`);
-    return;
-  }
-
-  if (!confirm(`Tem certeza que deseja apagar o livro "${l.titulo}"?`)) return;
-
-  state.livros = state.livros.filter(x => String(x.id) !== String(id));
-  addRelatorio(`Livro '${l.titulo}' foi removido ${formatarDataHoraExtenso()}.`);
-
-  if (editingLivroId === l.id) {
-    editingLivroId = null;
-    resetLivroFormUI();
-  }
-
-  persistAll();
-  toast('Livro apagado.');
-  renderAll();
-}
-
-function resetAlunoFormUI() {
-  const form = $('#alunoForm');
-  const submitBtn = form?.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = 'Cadastrar aluno';
-  const cancelBtn = $('#alunoCancelarEdicaoBtn');
-  cancelBtn?.remove();
-}
-
-function iniciarEdicaoAluno(id) {
-  const a = (state.alunos || []).find(x => String(x.id) === String(id));
-  if (!a) return;
-
-  const form = $('#alunoForm');
-  if (!form) return;
-
-  $('#alunoNome').value = a.nome;
-  $('#alunoTurma').value = a.turma;
-
-  editingAlunoId = a.id;
-
-  const submitBtn = form.querySelector('button[type="submit"]');
-  if (submitBtn) submitBtn.textContent = 'Salvar alterações';
-
-  if (!$('#alunoCancelarEdicaoBtn') && submitBtn) {
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'secondary';
-    cancelBtn.id = 'alunoCancelarEdicaoBtn';
-    cancelBtn.textContent = 'Cancelar edição';
-    cancelBtn.addEventListener('click', () => {
-      editingAlunoId = null;
-      resetAlunoFormUI();
-      form.reset?.();
-    });
-    submitBtn.insertAdjacentElement('afterend', cancelBtn);
-  }
-
-  form.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-}
-
-function apagarAluno(id) {
-  const a = (state.alunos || []).find(x => String(x.id) === String(id));
-  if (!a) return;
-
-  const ativos = getAtivosPorAluno(a.id);
-  if (ativos > 0) {
-    toast(`Não é possível apagar "${a.nome}": aluno possui empréstimo(s) ativo(s).`);
-    return;
-  }
-
-  if (!confirm(`Tem certeza que deseja apagar o aluno "${a.nome}"?`)) return;
-
-  state.alunos = state.alunos.filter(x => String(x.id) !== String(id));
-  addRelatorio(`Aluno ${a.nome} foi removido ${formatarDataHoraExtenso()}.`);
-
-  if (editingAlunoId === a.id) {
-    editingAlunoId = null;
-    resetAlunoFormUI();
-  }
-
-  persistAll();
-  toast('Aluno apagado.');
-  renderAll();
-}
-
-function renderEmprestimosTable() {
-  const body = $('#emprestimosBody');
-  const empty = $('#emprestimosEmpty');
-  if (!body) return;
-
-  const term = normalize($('#emprestimoBusca')?.value);
-
-  const findAluno = (id) => (state.alunos || []).find(a => String(a.id) === String(id));
-  const findLivro = (id) => (state.livros || []).find(l => String(l.id) === String(id));
-
-  const emprestimos = (state.emprestimos || []).filter(e => {
-    const aluno = findAluno(e.alunoId);
-    const livro = findLivro(e.livroId);
-    const info = getLoanStatus(e);
-
-    // Apply active filter
-    if (activeEmpFilter === 'vencidos' && (e.devolvido || info.status !== 'vencido')) return false;
-    if (activeEmpFilter === 'vencendo' && (e.devolvido || !['vence_hoje', 'vencendo_amanha', 'vencendo_breve'].includes(info.status))) return false;
-    if (activeEmpFilter === 'no_prazo' && (e.devolvido || info.status !== 'no_prazo')) return false;
-    if (activeEmpFilter === 'devolvidos' && !e.devolvido) return false;
-
-    if (!term) return true;
-    return normalize(`${aluno?.nome || ''} ${aluno?.turma || ''} ${livro?.titulo || ''} ${livro?.autor || ''} ${info.text || ''} ${e.dataRetirada || ''} ${e.dataLimite || ''} ${e.dataDevolucao || ''}`).includes(term);
-  }).sort((a, b) => {
-    if (a.devolvido === b.devolvido) {
-      const da = parseDateToLocal(a.dataRetirada);
-      const db = parseDateToLocal(b.dataRetirada);
-      const dateA = da ? da.getTime() : 0;
-      const dateB = db ? db.getTime() : 0;
-      return dateB - dateA;
-    }
-    return a.devolvido ? 1 : -1;
-  });
-
-  body.innerHTML = '';
-  if (!emprestimos.length) {
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  const fmtDate = (s) => formatDateLocal(s);
-
-  emprestimos.forEach(e => {
-    const aluno = findAluno(e.alunoId);
-    const livro = findLivro(e.livroId);
-    const info = getLoanStatus(e);
-    const dataLimite = e.dataLimite || addDaysToDate(e.dataRetirada, 7);
-
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td><strong>${escapeHtml(aluno?.nome || 'Aluno')}</strong> <span class="muted" style="font-size:11px;">(${escapeHtml(aluno?.turma || '-')})</span></td>
-      <td>${escapeHtml(livro?.titulo || 'Livro')}</td>
-      <td>${escapeHtml(fmtDate(e.dataRetirada))}</td>
-      <td>${escapeHtml(fmtDate(dataLimite))}</td>
-      <td><span class="status-pill ${info.badgeClass}">${info.icon} ${escapeHtml(info.shortText || info.text)}</span></td>
-      <td>${e.devolvido ? escapeHtml(fmtDate(e.dataDevolucao)) : '<span class="muted">-</span>'}</td>
-      <td style="text-align:right;">
-        <div class="inline-actions">
-          ${!e.devolvido ? `
-            <button type="button" class="secondary btn-small" data-action="notif-copy" data-id="${escapeHtmlAttr(e.id)}" title="Copiar Mensagem WhatsApp">📲 Aviso</button>
-            <button type="button" class="secondary btn-small" data-action="dev" data-id="${escapeHtmlAttr(e.id)}">Devolver</button>
-          ` : `
-            <span class="status-pill badge-returned" style="font-size:11px;">Devolvido</span>
-          `}
-        </div>
-      </td>
-    `;
-    body.appendChild(tr);
-  });
-}
-
-function renderNotificationsAndAlerts() {
-  const alerts = getLoanAlerts();
-  const notifBadge = $('#notifBadge');
-  const banner = $('#dashboardAlertBanner');
-  const bannerTitle = $('#alertBannerTitle');
-  const bannerDesc = $('#alertBannerDesc');
-  const totalCount = $('#notifTotalCount');
-  const vencidosCount = $('#notifVencidosCount');
-  const breveCount = $('#notifBreveCount');
-
-  // Topbar Notification Bell
-  if (notifBadge) {
-    if (alerts.totalAlertas > 0) {
-      notifBadge.textContent = String(alerts.totalAlertas);
-      notifBadge.style.display = 'flex';
-      notifBadge.style.background = alerts.vencidos.length > 0 ? '#ef4444' : '#f59e0b';
-    } else {
-      notifBadge.style.display = 'none';
-    }
-  }
-
-  // Dashboard Alert Banner
-  if (banner) {
-    if (alerts.vencidos.length > 0) {
-      banner.style.display = 'flex';
-      if (bannerTitle) bannerTitle.textContent = `⚠️ Atenção: ${alerts.vencidos.length} empréstimo${alerts.vencidos.length === 1 ? '' : 's'} com prazo VENCIDO!`;
-      if (bannerDesc) bannerDesc.textContent = `Alunos em atraso precisam ser notificados para devolver ou renovar seus livros.`;
-    } else if (alerts.vencendoBreve.length > 0) {
-      banner.style.display = 'flex';
-      banner.style.background = 'linear-gradient(135deg, #fffbeb, #fef3c7)';
-      banner.style.borderColor = '#fcd34d';
-      if (bannerTitle) {
-        bannerTitle.textContent = `⏳ ${alerts.vencendoBreve.length} empréstimo${alerts.vencendoBreve.length === 1 ? '' : 's'} vencendo em breve!`;
-        bannerTitle.style.color = '#92400e';
-      }
-      if (bannerDesc) {
-        bannerDesc.textContent = `Verifique os prazos próximos para organizar o acervo.`;
-        bannerDesc.style.color = '#78350f';
-      }
-    } else {
-      banner.style.display = 'none';
-    }
-  }
-
-  if (totalCount) totalCount.textContent = String(alerts.totalAlertas);
-  if (vencidosCount) vencidosCount.textContent = String(alerts.vencidos.length);
-  if (breveCount) breveCount.textContent = String(alerts.vencendoBreve.length);
-
-  renderNotificationsModalList();
-}
-
-function renderNotificationsModalList() {
-  const container = $('#notifListContainer');
-  const empty = $('#notifEmpty');
-  if (!container) return;
-
-  const alerts = getLoanAlerts();
-  let list = [];
-
-  if (activeNotifFilter === 'vencidos') {
-    list = alerts.vencidos;
-  } else if (activeNotifFilter === 'breve') {
-    list = alerts.vencendoBreve;
-  } else {
-    list = [...alerts.vencidos, ...alerts.vencendoBreve];
-  }
-
-  container.innerHTML = '';
-  if (!list.length) {
-    if (empty) empty.style.display = 'block';
-    return;
-  }
-  if (empty) empty.style.display = 'none';
-
-  const findAluno = (id) => (state.alunos || []).find(a => String(a.id) === String(id));
-  const findLivro = (id) => (state.livros || []).find(l => String(l.id) === String(id));
-
-  list.forEach(e => {
-    const aluno = findAluno(e.alunoId);
-    const livro = findLivro(e.livroId);
-    const isVencido = e.info.status === 'vencido';
-
-    const card = document.createElement('div');
-    card.className = `notif-card ${isVencido ? 'overdue' : 'warning'}`;
-    card.innerHTML = `
-      <div class="notif-card-header">
-        <div>
-          <span class="notif-student">👨 ${escapeHtml(aluno?.nome || 'Aluno')}</span>
-          <span class="pill" style="font-size: 11px; padding: 2px 8px; margin-left: 6px;">Turma: ${escapeHtml(aluno?.turma || '-')}</span>
-        </div>
-        <span class="status-pill ${e.info.badgeClass}">${e.info.icon} ${escapeHtml(e.info.text)}</span>
-      </div>
-      <div class="notif-book">📖 Livro: <strong>${escapeHtml(livro?.titulo || 'Livro')}</strong> (${escapeHtml(livro?.autor || 'Autor')})</div>
-      <div class="notif-meta">
-        <span>📅 Retirado em: <strong>${formatDateLocal(e.dataRetirada)}</strong></span>
-        <span>⏰ Prazo Limite: <strong>${formatDateLocal(e.info.dataLimite)}</strong></span>
-      </div>
-      <div class="notif-actions">
-        <button type="button" class="btn-small secondary" data-action="notif-copy" data-id="${escapeHtmlAttr(e.id)}">📲 Copiar Mensagem WhatsApp</button>
-        <button type="button" class="btn-small" data-action="notif-dev" data-id="${escapeHtmlAttr(e.id)}" style="background: var(--primary);">✅ Devolver Livro</button>
-      </div>
-    `;
-    container.appendChild(card);
-  });
-}
-
-function copiarAvisoWhatsApp(emprestimoId) {
-  const e = (state.emprestimos || []).find(x => String(x.id) === String(emprestimoId));
-  if (!e) return;
-
-  const aluno = (state.alunos || []).find(a => String(a.id) === String(e.alunoId));
-  const livro = (state.livros || []).find(l => String(l.id) === String(e.livroId));
-  const info = getLoanStatus(e);
-  const dataLimiteFmt = formatDateLocal(info.dataLimite);
-  const dataRetiradaFmt = formatDateLocal(e.dataRetirada);
-
-  const texto = info.status === 'vencido'
-    ? `Olá, ${aluno?.nome || 'Aluno'}! 👋\nLembramos que o prazo de devolução do livro "${livro?.titulo || 'Livro'}", retirado na Biblioteca Escolar em ${dataRetiradaFmt}, VENCEU em ${dataLimiteFmt} (${info.text}).\n\nPor favor, compareça à biblioteca para devolução ou renovação. Obrigado!`
-    : `Olá, ${aluno?.nome || 'Aluno'}! 👋\nLembramos que o prazo de devolução do livro "${livro?.titulo || 'Livro'}", retirado na Biblioteca Escolar em ${dataRetiradaFmt}, está próximo do vencimento (${dataLimiteFmt}).\n\nCaso já tenha terminado a leitura, você pode fazer a devolução na biblioteca. Obrigado!`;
-
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(texto).then(() => {
-      toast('Mensagem de aviso copiada para a área de transferência!', 'success');
-    }).catch(() => {
-      prompt('Copie a mensagem de aviso abaixo:', texto);
-    });
-  } else {
-    prompt('Copie a mensagem de aviso abaixo:', texto);
-  }
-}
-
-// ==========================================
-// 4. PRATELEIRA VIRTUAL (ORGANIZAÇÃO E VISUALIZAÇÃO)
-// ==========================================
-
-function renderPrateleiraVirtual() {
-  const container = $('#shelfContainer');
-  const countEl = $('#prateleiraTotalLivros');
-  const catFilterSelect = $('#shelfFilterCategory');
-  if (!container) return;
-
-  const livrosList = state.livros || [];
-  if (countEl) countEl.textContent = `${livrosList.length} livro${livrosList.length === 1 ? '' : 's'} no acervo`;
-
-  // Atualizar opções do filtro de categoria
-  if (catFilterSelect) {
-    const currentCat = shelfState.filterCategory;
-    const cats = Array.from(new Set(livrosList.map(l => l.categoria).filter(Boolean))).sort();
-    catFilterSelect.innerHTML = '<option value="">Todas as Categorias</option>' +
-      cats.map(c => `<option value="${escapeHtmlAttr(c)}" ${c === currentCat ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
-  }
-
-  // 1. Filtrar livros
-  const term = normalize(shelfState.search);
-  let filtered = livrosList.filter(l => {
-    if (shelfState.filterCategory && l.categoria !== shelfState.filterCategory) return false;
-
-    const disp = getDisponiveisParaLivro(l);
-    if (shelfState.filterStatus === 'disponivel' && disp <= 0) return false;
-    if (shelfState.filterStatus === 'esgotado' && disp > 0) return false;
-
-    if (!term) return true;
-    return normalize(`${l.titulo} ${l.autor} ${l.categoria}`).includes(term);
-  });
-
-  // 2. Ordenar livros
-  filtered.sort((a, b) => {
-    switch (shelfState.sortBy) {
-      case 'titulo-desc':
-        return b.titulo.localeCompare(a.titulo, 'pt-BR');
-      case 'autor-asc':
-        return a.autor.localeCompare(b.autor, 'pt-BR');
-      case 'acervo-desc':
-        return (b.acervo || 1) - (a.acervo || 1);
-      case 'populares': {
-        const empA = (state.emprestimos || []).filter(e => String(e.livroId) === String(a.id)).length;
-        const empB = (state.emprestimos || []).filter(e => String(e.livroId) === String(b.id)).length;
-        return empB - empA;
-      }
-      case 'recentes':
-        return (b.criadoEm || '').localeCompare(a.criadoEm || '');
-      case 'titulo-asc':
-      default:
-        return a.titulo.localeCompare(b.titulo, 'pt-BR');
-    }
-  });
-
-  // 3. Agrupar livros em estantes
-  let groups = [];
-  if (shelfState.groupBy === 'categoria') {
-    const map = {};
-    filtered.forEach(l => {
-      const k = l.categoria || 'Outro';
-      if (!map[k]) map[k] = [];
-      map[k].push(l);
-    });
-    groups = Object.keys(map).sort().map(cat => {
-      const theme = getCategoryTheme(cat);
-      return { title: `${theme.icon} ${cat}`, count: map[cat].length, books: map[cat] };
-    });
-  } else if (shelfState.groupBy === 'autor') {
-    const map = {};
-    filtered.forEach(l => {
-      const k = l.autor || 'Autor Desconhecido';
-      if (!map[k]) map[k] = [];
-      map[k].push(l);
-    });
-    groups = Object.keys(map).sort().map(author => {
-      return { title: `✍️ ${author}`, count: map[author].length, books: map[author] };
-    });
-  } else if (shelfState.groupBy === 'disponibilidade') {
-    const dispBooks = filtered.filter(l => getDisponiveisParaLivro(l) > 0);
-    const outBooks = filtered.filter(l => getDisponiveisParaLivro(l) <= 0);
-    if (dispBooks.length) groups.push({ title: '🟢 Livros com Exemplares Disponíveis', count: dispBooks.length, books: dispBooks });
-    if (outBooks.length) groups.push({ title: '🔴 Livros com Todos os Exemplares Emprestados', count: outBooks.length, books: outBooks });
-  } else {
-    // Estante única contínua
-    groups = [{ title: '📚 Acervo Completo da Biblioteca', count: filtered.length, books: filtered }];
-  }
-
-  container.innerHTML = '';
-  if (!filtered.length) {
-    container.innerHTML = `
-      <div style="background:#ffffff; border:1px solid var(--border); border-radius:16px; padding:36px 20px; text-align:center;">
-        <div style="font-size:40px; margin-bottom:8px;">🔍</div>
-        <h4 style="margin:0 0 6px; font-weight:900;">Nenhum livro encontrado na prateleira</h4>
-        <p style="margin:0; font-size:13px; color:var(--muted);">Tente ajustar a busca ou os filtros de categoria e disponibilidade.</p>
-      </div>
-    `;
-    return;
-  }
-
-  // 4. Renderizar grupos (Modo Estante de Madeira ou Modo Catálogo)
-  if (shelfState.viewMode === 'grid') {
-    // Visualização em Grade de Cards Modernos
-    groups.forEach(g => {
-      const groupEl = document.createElement('div');
-      groupEl.style.marginBottom = '24px';
-      groupEl.innerHTML = `
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-          <h3 style="margin:0; font-size:16px; font-weight:1000; color:var(--text);">${escapeHtml(g.title)}</h3>
-          <span class="pill">${g.count} livro${g.count === 1 ? '' : 's'}</span>
-        </div>
-        <div class="shelf-grid">
-          ${g.books.map(l => {
-            const disp = getDisponiveisParaLivro(l);
-            const theme = getCategoryTheme(l.categoria);
-            const isAvailable = disp > 0;
-            return `
-              <div class="book-card" data-action="ver-livro" data-id="${escapeHtmlAttr(l.id)}">
-                <div class="book-card-cover" style="background: ${theme.bg};">
-                  <div class="book-card-cover-top">
-                    <span class="book-card-icon">${theme.icon}</span>
-                    <span class="status-pill ${isAvailable ? 'badge-ok' : 'badge-overdue'}" style="font-size:10px; padding:2px 8px;">
-                      ${isAvailable ? `${disp} disp.` : 'Esgotado'}
-                    </span>
-                  </div>
-                  <div class="book-card-cover-title">${escapeHtml(l.titulo)}</div>
-                </div>
-                <div class="book-card-body">
-                  <div class="book-card-author">✍️ ${escapeHtml(l.autor)}</div>
-                  <div class="book-card-footer">
-                    <span class="muted">${escapeHtml(l.categoria)}</span>
-                    <span>Total: <strong>${Number(l.acervo || 1)}</strong></span>
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      `;
-      container.appendChild(groupEl);
-    });
-  } else {
-    // Visualização em Estantes de Madeira 3D Realistas
-    groups.forEach(g => {
-      const section = document.createElement('div');
-      section.className = 'wood-shelf-section';
-
-      let booksHtml = '';
-      g.books.forEach(l => {
-        const disp = getDisponiveisParaLivro(l);
-        const theme = getCategoryTheme(l.categoria);
-        const isOut = disp <= 0;
-        // Altura e largura variáveis para efeito realista de estante
-        const titleHash = (l.titulo || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        const spineWidth = 40 + (titleHash % 16); // 40px a 55px
-        const spineHeight = 160 + (titleHash % 25); // 160px a 185px
-
-        booksHtml += `
-          <div class="spine-book"
-               data-action="ver-livro"
-               data-id="${escapeHtmlAttr(l.id)}"
-               title="${escapeHtmlAttr(l.titulo)} - ${escapeHtmlAttr(l.autor)} (${disp} disponível)"
-               style="background: ${theme.bg}; width: ${spineWidth}px; height: ${spineHeight}px; border-color: ${theme.border};">
-            <span class="spine-icon">${theme.icon}</span>
-            <div class="spine-title">${escapeHtml(l.titulo)}</div>
-            <div class="spine-status-dot ${isOut ? 'out' : ''}" title="${isOut ? 'Esgotado' : `${disp} exemplares disponíveis`}"></div>
-          </div>
-        `;
-      });
-
-      section.innerHTML = `
-        <div class="wood-shelf-header">
-          <div class="wood-shelf-title">${escapeHtml(g.title)}</div>
-          <div class="wood-shelf-count">${g.count} livro${g.count === 1 ? '' : 's'}</div>
-        </div>
-        <div class="wood-shelf-stage">
-          <div class="shelf-books-row">
-            ${booksHtml}
-          </div>
-          <div class="wood-plank"></div>
-        </div>
-      `;
-      container.appendChild(section);
-    });
-  }
-}
-
-function abrirModalDetalhesLivro(livroId) {
-  const l = (state.livros || []).find(x => String(x.id) === String(livroId));
-  if (!l) return;
-
-  const modal = $('#modalDetalhesLivro');
-  const conteudo = $('#detalhesLivroConteudo');
-  const acoes = $('#detalhesLivroAcoes');
-  const header = $('#detalhesHeader');
-  if (!modal || !conteudo) return;
-
-  const theme = getCategoryTheme(l.categoria);
-  const disp = getDisponiveisParaLivro(l);
-  const total = Number(l.acervo || 1);
-  const emprestados = total - disp;
-
-  // Empréstimos ativos deste livro
-  const empAtivos = (state.emprestimos || []).filter(e => !e.devolvido && String(e.livroId) === String(l.id));
-
-  let borrowersHtml = '';
-  if (empAtivos.length > 0) {
-    borrowersHtml = `
-      <div style="margin-top: 14px; background: #f8fafc; border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
-        <div style="font-size: 12px; font-weight: 900; color: var(--text); margin-bottom: 8px;">🔄 Empréstimos Ativos deste Livro:</div>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          ${empAtivos.map(e => {
-            const aluno = (state.alunos || []).find(a => String(a.id) === String(e.alunoId));
-            const info = getLoanStatus(e);
-            return `
-              <div style="display:flex; align-items:center; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px dashed #e2e8f0;">
-                <span><strong>${escapeHtml(aluno?.nome || 'Aluno')}</strong> (${escapeHtml(aluno?.turma || '-')})</span>
-                <span class="status-pill ${info.badgeClass}" style="font-size:10px;">${info.icon} ${info.shortText || info.text}</span>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-  }
-
-  conteudo.innerHTML = `
-    <div style="display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap;">
-      <div style="width: 110px; height: 160px; border-radius: 12px; background: ${theme.bg}; display:flex; flex-direction:column; justify-content:space-between; padding:12px; color:#fff; box-shadow: 0 10px 20px rgba(0,0,0,0.2); flex-shrink: 0;">
-        <span style="font-size: 24px;">${theme.icon}</span>
-        <div style="font-size: 13px; font-weight: 1000; line-height: 1.2; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${escapeHtml(l.titulo)}</div>
-      </div>
-      <div style="flex: 1; min-width: 200px;">
-        <h3 style="margin: 0 0 6px; font-size: 18px; font-weight: 1000; color: var(--text);">${escapeHtml(l.titulo)}</h3>
-        <p style="margin: 0 0 10px; font-size: 14px; font-weight: 750; color: var(--muted);">✍️ Autor: <strong>${escapeHtml(l.autor)}</strong></p>
-
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-          <span class="pill" style="border-color: ${theme.border}; background: #f8fafc;">📁 ${escapeHtml(l.categoria)}</span>
-          <span class="pill" style="border-color: var(--border);">📦 Acervo total: <strong>${total}</strong></span>
-          <span class="status-pill ${disp > 0 ? 'badge-ok' : 'badge-overdue'}">${disp > 0 ? `🟢 ${disp} disponível${disp === 1 ? '' : 'is'}` : '🔴 Esgotado'}</span>
-        </div>
-
-        <div style="font-size: 12px; color: var(--muted); line-height: 1.5;">
-          ${emprestados > 0 ? `Atualmente <strong>${emprestados}</strong> exemplar${emprestados === 1 ? '' : 'es'} está em empréstimo.` : 'Todos os exemplares estão disponíveis para retirada imediata.'}
-        </div>
-      </div>
-    </div>
-    ${borrowersHtml}
-  `;
-
-  if (acoes) {
-    acoes.innerHTML = `
-      <button type="button" class="secondary" data-close-modal="#modalDetalhesLivro">Fechar</button>
-      <button type="button" class="secondary" id="btnModalDetalhesQr" data-id="${escapeHtmlAttr(l.id)}">🏷️ Gerar QR / Etiqueta</button>
-      <button type="button" class="secondary" id="btnModalDetalhesEditar" data-id="${escapeHtmlAttr(l.id)}">✏️ Editar</button>
-      ${disp > 0 ? `<button type="button" id="btnModalDetalhesEmprestar" data-id="${escapeHtmlAttr(l.id)}">🔄 Realizar Empréstimo</button>` : ''}
-    `;
-
-    $('#btnModalDetalhesQr')?.addEventListener('click', () => {
-      closeModal('#modalDetalhesLivro');
-      abrirModalEtiquetaQr(l.id);
-    });
-
-    $('#btnModalDetalhesEditar')?.addEventListener('click', () => {
-      closeModal('#modalDetalhesLivro');
-      // Ativar seção de livros
-      const navLivros = document.querySelector('.nav-item[data-nav="livros"]');
-      if (navLivros) navLivros.click();
-      iniciarEdicaoLivro(l.id);
-    });
-
-    $('#btnModalDetalhesEmprestar')?.addEventListener('click', () => {
-      closeModal('#modalDetalhesLivro');
-      // Ativar seção de empréstimos
-      const navEmp = document.querySelector('.nav-item[data-nav="emprestimos"]');
-      if (navEmp) navEmp.click();
-      const elLivro = $('#emprestimoLivro');
-      if (elLivro) elLivro.value = l.id;
-      $('#emprestimoAluno')?.focus();
-    });
-  }
-
-  openModal('#modalDetalhesLivro');
-}
-
-// ==========================================
-// 3. QR CODE & LEITOR DE CÓDIGO DE BARRAS (ISBN)
-// ==========================================
-
-function iniciarScannerCamera(target = 'livro') {
-  currentScannerTarget = target;
-  const modal = $('#modalQrScanner');
-  const title = $('#qrModalTitle');
-  const feedback = $('#scannerFeedback');
-  const manualInput = $('#scannerManualInput');
-
-  if (feedback) feedback.style.display = 'none';
-  if (manualInput) manualInput.value = '';
-
-  if (title) {
-    title.textContent = target === 'emprestimo'
-      ? '📷 Escanear QR Code do Livro ou Aluno para Empréstimo'
-      : '📷 Leitor de QR Code & Código de Barras (ISBN)';
-  }
-
-  openModal('#modalQrScanner');
-
-  if (typeof Html5Qrcode !== 'undefined') {
-    try {
-      if (html5QrCodeScanner) {
-        try { html5QrCodeScanner.stop(); } catch {}
-      }
-
-      html5QrCodeScanner = new Html5Qrcode('qrReaderElem');
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-      html5QrCodeScanner.start(
-        { facingMode: 'environment' },
-        config,
-        (decodedText) => {
-          processarCodigoLido(decodedText, currentScannerTarget);
-        },
-        () => {} // Ignorar falhas de quadro contínuo
-      ).catch(err => {
-        console.warn('Erro ao abrir câmera traseira, tentando câmera padrão:', err);
-        html5QrCodeScanner.start(
-          { facingMode: 'user' },
-          config,
-          (decodedText) => {
-            processarCodigoLido(decodedText, currentScannerTarget);
-          },
-          () => {}
-        ).catch(cameraErr => {
-          console.error('Câmera indisponível:', cameraErr);
-          if (feedback) {
-            feedback.style.display = 'block';
-            feedback.style.background = '#fef2f2';
-            feedback.style.color = '#991b1b';
-            feedback.textContent = 'Acesso à câmera indisponível ou bloqueado. Use o campo de busca manual abaixo.';
-          }
-        });
-      });
-    } catch (e) {
-      console.error('Erro ao inicializar Html5Qrcode:', e);
-    }
-  }
-}
-
-function pararScannerCamera() {
-  if (html5QrCodeScanner) {
-    try {
-      html5QrCodeScanner.stop().then(() => {
-        html5QrCodeScanner.clear();
-      }).catch(() => {});
-    } catch {}
-  }
-  closeModal('#modalQrScanner');
-}
-
-// Busca dados do livro pelo código ISBN usando APIs públicas
-async function buscarLivroPorIsbn(isbn) {
-  const cleanIsbn = isbn.replace(/[^0-9X]/gi, '');
-  if (!cleanIsbn) return null;
-
-  // 1. Tentar BrasilAPI (ótimo para livros brasileiros)
-  try {
-    const res = await fetch(`https://brasilapi.com.br/api/isbn/v1/${cleanIsbn}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && (data.title || data.name)) {
-        return {
-          titulo: data.title || data.name || '',
-          autor: Array.isArray(data.authors) ? data.authors.join(', ') : (data.authors || 'Autor Desconhecido'),
-          categoria: mapearCategoria(data.subjects?.[0] || 'Outro'),
-          acervo: 1
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Falha na BrasilAPI:', err);
-  }
-
-  // 2. Tentar Google Books API
-  try {
-    const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanIsbn}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.items && data.items.length > 0) {
-        const info = data.items[0].volumeInfo;
-        return {
-          titulo: info.title || '',
-          autor: Array.isArray(info.authors) ? info.authors.join(', ') : 'Autor Desconhecido',
-          categoria: mapearCategoria(info.categories?.[0] || 'Outro'),
-          acervo: 1
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Falha na Google Books API:', err);
-  }
-
-  // 3. Tentar Open Library API
-  try {
-    const res = await fetch(`https://openlibrary.org/isbn/${cleanIsbn}.json`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.title) {
-        return {
-          titulo: data.title,
-          autor: 'Autor Desconhecido',
-          categoria: 'Outro',
-          acervo: 1
-        };
-      }
-    }
-  } catch (err) {
-    console.warn('Falha na Open Library API:', err);
-  }
-
-  return null;
-}
-
-function mapearCategoria(categoriaBruta) {
-  if (!categoriaBruta) return 'Outro';
-  const c = normalize(categoriaBruta);
-  if (c.includes('fiction') || c.includes('ficção') || c.includes('sci-fi')) return 'Ficção Científica';
-  if (c.includes('romance') || c.includes('amor')) return 'Romance';
-  if (c.includes('fantas') || c.includes('magic')) return 'Fantasia';
-  if (c.includes('advent') || c.includes('aventura')) return 'Aventura';
-  if (c.includes('thrill') || c.includes('suspense') || c.includes('mister')) return 'Suspense';
-  if (c.includes('biograph') || c.includes('biografia') || c.includes('memoir')) return 'Biografia';
-  if (c.includes('histor') || c.includes('história')) return 'História';
-  if (c.includes('humor') || c.includes('comédia') || c.includes('comedy')) return 'Comédia';
-  if (c.includes('poe') || c.includes('poesia')) return 'Poesia';
-  if (c.includes('educa') || c.includes('didático') || c.includes('school')) return 'Didático';
-  return 'Outro';
-}
-
-async function processarCodigoLido(codigo, target) {
-  if (!codigo) return;
-  const raw = codigo.trim();
-  const feedback = $('#scannerFeedback');
-
-  if (feedback) {
-    feedback.style.display = 'block';
-    feedback.style.background = '#e0f2fe';
-    feedback.style.color = '#0369a1';
-    feedback.textContent = `Código detectado: ${raw}. Processando...`;
-  }
-
-  // Verificar se é JSON de QR Code da Biblioteca
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === 'object') {
-      if (parsed.tipo === 'livro' || parsed.titulo) {
-        if (target === 'emprestimo') {
-          // Selecionar no select de empréstimo
-          const match = state.livros.find(l => String(l.id) === String(parsed.id) || normalize(l.titulo) === normalize(parsed.titulo));
-          if (match) {
-            const elLivro = $('#emprestimoLivro');
-            if (elLivro) elLivro.value = match.id;
-            pararScannerCamera();
-            toast(`Livro "${match.titulo}" selecionado para empréstimo!`, 'success');
-            return;
-          }
-        } else {
-          // Preencher formulário de livro
-          if ($('#livroTitulo')) $('#livroTitulo').value = parsed.titulo || '';
-          if ($('#livroAutor')) $('#livroAutor').value = parsed.autor || '';
-          if ($('#livroCategoria')) $('#livroCategoria').value = parsed.categoria || 'Outro';
-          pararScannerCamera();
-          // Ir para tela de livros
-          const navLivros = document.querySelector('.nav-item[data-nav="livros"]');
-          if (navLivros) navLivros.click();
-          toast(`Dados do livro "${parsed.titulo}" preenchidos via QR Code!`, 'success');
-          return;
-        }
-      }
-    }
-  } catch {}
-
-  // Verificar se é ISBN (código de barras de 10 a 13 dígitos numéricos)
-  const cleanNum = raw.replace(/[^0-9X]/gi, '');
-  if (cleanNum.length >= 10 && cleanNum.length <= 13) {
-    if (feedback) feedback.textContent = `Buscando dados do livro pelo ISBN ${cleanNum}...`;
-    const bookData = await buscarLivroPorIsbn(cleanNum);
-
-    if (bookData) {
-      if (target === 'emprestimo') {
-        // Verificar se livro já existe no acervo
-        const match = state.livros.find(l => normalize(l.titulo) === normalize(bookData.titulo));
-        if (match) {
-          const elLivro = $('#emprestimoLivro');
-          if (elLivro) elLivro.value = match.id;
-          pararScannerCamera();
-          toast(`Livro "${match.titulo}" selecionado para empréstimo!`, 'success');
-          return;
-        }
-      }
-
-      // Preencher formulário de cadastro de livros
-      if ($('#livroTitulo')) $('#livroTitulo').value = bookData.titulo;
-      if ($('#livroAutor')) $('#livroAutor').value = bookData.autor;
-      if ($('#livroCategoria')) $('#livroCategoria').value = bookData.categoria;
-      if ($('#livroAcervo')) $('#livroAcervo').value = '1';
-
-      pararScannerCamera();
-      const navLivros = document.querySelector('.nav-item[data-nav="livros"]');
-      if (navLivros) navLivros.click();
-      toast(`Livro "${bookData.titulo}" localizado pelo código ISBN!`, 'success');
-      return;
-    } else {
-      if (feedback) {
-        feedback.style.background = '#fffbeb';
-        feedback.style.color = '#92400e';
-        feedback.textContent = `ISBN ${cleanNum} detectado, mas não encontrado online. Preencha os campos manualmente.`;
-      }
-      return;
-    }
-  }
-
-  // Tentar encontrar por ID ou título nos livros cadastrados
-  const matchLivro = state.livros.find(l => String(l.id) === raw || normalize(l.titulo).includes(normalize(raw)));
-  if (matchLivro) {
-    if (target === 'emprestimo') {
-      const elLivro = $('#emprestimoLivro');
-      if (elLivro) elLivro.value = matchLivro.id;
-      pararScannerCamera();
-      toast(`Livro "${matchLivro.titulo}" selecionado!`, 'success');
-      return;
-    } else {
-      pararScannerCamera();
-      abrirModalDetalhesLivro(matchLivro.id);
-      return;
-    }
-  }
-
-  // Tentar encontrar aluno por ID ou nome
-  const matchAluno = state.alunos.find(a => String(a.id) === raw || normalize(a.nome).includes(normalize(raw)));
-  if (matchAluno && target === 'emprestimo') {
-    const elAluno = $('#emprestimoAluno');
-    if (elAluno) elAluno.value = matchAluno.id;
-    pararScannerCamera();
-    toast(`Aluno "${matchAluno.nome}" selecionado!`, 'success');
-    return;
-  }
-
-  if (feedback) {
-    feedback.style.background = '#fef2f2';
-    feedback.style.color = '#991b1b';
-    feedback.textContent = `Código "${raw}" não reconhecido como ISBN ou livro cadastrado.`;
-  }
-}
-
-function abrirModalEtiquetaQr(livroId) {
-  const l = (state.livros || []).find(x => String(x.id) === String(livroId));
-  if (!l) return;
-
-  const qrContainer = $('#qrCodeContainer');
-  const titleEl = $('#labelBookTitle');
-  const authorEl = $('#labelBookAuthor');
-  const catEl = $('#labelBookCategory');
-  const copiesEl = $('#labelBookCopies');
-
-  if (titleEl) titleEl.textContent = l.titulo;
-  if (authorEl) authorEl.textContent = `Autor: ${l.autor}`;
-  if (catEl) catEl.textContent = l.categoria;
-  if (copiesEl) copiesEl.textContent = `${l.acervo || 1} exemplar${(l.acervo || 1) === 1 ? '' : 'es'}`;
-
-  // Gerar QR Code
-  if (qrContainer) {
-    qrContainer.innerHTML = '';
-    const payload = JSON.stringify({
-      tipo: 'livro',
-      id: l.id,
-      titulo: l.titulo,
-      autor: l.autor,
-      categoria: l.categoria
-    });
-
-    if (typeof QRCode !== 'undefined') {
-      try {
-        new QRCode(qrContainer, {
-          text: payload,
-          width: 120,
-          height: 120,
-          colorDark: '#0f172a',
-          colorLight: '#ffffff',
-          correctLevel: QRCode.CorrectLevel.M
-        });
-      } catch (err) {
-        console.error('Erro ao gerar QRCode:', err);
-        qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(payload)}" alt="QR Code" width="120" height="120" />`;
-      }
-    } else {
-      qrContainer.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(payload)}" alt="QR Code" width="120" height="120" />`;
-    }
-  }
-
-  openModal('#modalQrEtiqueta');
-}
-
-function imprimirEtiqueta() {
-  window.print();
-}
-
-// ==========================================
-// 1. APAGAR TUDO COM CONFIRMAÇÃO E AVISO DE BACKUP
-// ==========================================
-
-function openResetConfirmationModal() {
-  const countsEl = $('#resetStatusCounts');
-  const lCount = state.livros.length;
-  const aCount = state.alunos.length;
-  const eCount = state.emprestimos.length;
-  const rCount = state.relatorios.length;
-
-  if (countsEl) {
-    countsEl.innerHTML = `
-      📊 <strong>Registros a serem excluídos:</strong>
-      ${lCount} livros, ${aCount} alunos, ${eCount} empréstimos e ${rCount} relatórios.
-    `;
-  }
-
-  openModal('#modalConfirmarReset');
-}
-
-function executarResetComBackup() {
-  // 1. Baixar arquivo de backup JSON
-  downloadJsonFile(getBackup(state), `biblioteca-backup-${new Date().toISOString().split('T')[0]}.json`);
-
-  // 2. Limpar dados
-  state.alunos = [];
-  state.livros = [];
-  state.emprestimos = [];
-  state.relatorios = [];
-
-  editingLivroId = null;
-  editingAlunoId = null;
-  resetLivroFormUI();
-  resetAlunoFormUI();
-
-  persistAll();
-  addRelatorio(`Todos os dados do sistema foram apagados com backup de segurança salvo ${formatarDataHoraExtenso()}.`);
-  closeModal('#modalConfirmarReset');
-  toast('Backup baixado e sistema resetado com sucesso!', 'success');
-  renderAll();
-}
-
-function executarResetSemBackup() {
-  if (!confirm('Tem certeza absoluta que deseja apagar TODOS os dados SEM fazer backup? Esta ação NÃO poderá ser desfeita!')) {
-    return;
-  }
-
-  state.alunos = [];
-  state.livros = [];
-  state.emprestimos = [];
-  state.relatorios = [];
-
-  editingLivroId = null;
-  editingAlunoId = null;
-  resetLivroFormUI();
-  resetAlunoFormUI();
-
-  persistAll();
-  addRelatorio(`Todos os dados foram apagados SEM backup ${formatarDataHoraExtenso()}.`);
-  closeModal('#modalConfirmarReset');
-  toast('Todos os dados foram apagados.', 'warning');
-  renderAll();
-}
-
-function downloadJsonFile(data, fileName) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+// ---------------- Exportação CSV ----------------
+
+function baixarCSV(nomeArquivo, linhas) {
+  if (!linhas || !linhas.length) { toast('Nada para exportar.', 'aviso'); return; }
+  const csv = linhas.map(l => l.map(c => {
+    const s = String(c ?? '');
+    return /[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(';')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast(`Arquivo "${nomeArquivo}" exportado!`);
+}
+
+function baixarJSON(nomeArquivo, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
-function importFromJson(text) {
-  if (!text) return false;
+// ============================================================
+// CARREGAMENTO DE DADOS
+// ============================================================
 
+async function carregarTurmas() {
   try {
-    const data = JSON.parse(text);
-    setFromBackup({
-      data,
-      uidFn: uid,
-      setState: ({ alunos, livros, emprestimos, relatorios }) => {
-        state.alunos = alunos;
-        state.livros = livros;
-        state.emprestimos = emprestimos;
-        state.relatorios = relatorios;
-      }
-    });
-    return true;
-  } catch (err) {
-    return false;
+    const data = await api('/api/turmas');
+    state.turmas = data.turmas || [];
+    popularSelectTurmas($('#alunoTurma'));
+    popularSelectTurmas($('#editarAlunoTurma'));
+    popularSelectTurmas($('#dedTurmaPadrao'));
+  } catch (e) {
+    console.error('Erro ao carregar turmas:', e);
   }
 }
 
-function gerarRelatorioResumo() {
-  renderRelatorioResumo();
+function popularSelectTurmas(select) {
+  if (!select) return;
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="">Selecione...</option>' +
+    state.turmas.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+  if (valorAtual && state.turmas.includes(valorAtual)) select.value = valorAtual;
 }
 
-function exportarRelatorioPDF() {
-  const content = `
-    <html>
-      <head>
-        <title>Relatório Biblioteca</title>
-        <style>
-          body { font-family: system-ui, sans-serif; padding: 32px; color: #111827; }
-          h1, h2 { color: #166534; }
-          table { width:100%; border-collapse: collapse; margin-top:20px; }
-          th, td { text-align:left; padding: 10px; border:1px solid #d1d5db; }
-          th { background: #ecfdf5; }
-          .section { margin-bottom: 24px; }
-        </style>
-      </head>
-      <body>
-        <h1>Relatório da Biblioteca</h1>
-        <div class="section">
-          <h2>Resumo rápido</h2>
-          ${$('#relatorioResumo')?.innerHTML || ''}
-        </div>
-        <div class="section">
-          <h2>Histórico de atividades</h2>
-          <table>
-            <thead><tr><th>Atividade</th></tr></thead>
-            <tbody>
-              ${(state.relatorios || []).slice().sort((a,b) => new Date(b.criadoEm) - new Date(a.criadoEm)).map(r => `<tr><td>${escapeHtml(r.mensagem)}</td></tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </body>
-    </html>
-  `;
+// Popula os dropdowns de Aluno e Livro do formulário de empréstimo
+function popularSelectsEmprestimo() {
+  const selAluno = $('#emprestimoAluno');
+  if (selAluno) {
+    const atual = selAluno.value;
+    selAluno.innerHTML = '<option value="">Selecione...</option>' +
+      state.alunos.map(a =>
+        `<option value="${a.id}">${escapeHtml(a.nome)} — ${escapeHtml(a.turma)}</option>`
+      ).join('');
+    if (atual && state.alunos.some(a => String(a.id) === String(atual))) selAluno.value = atual;
+    if (selAluno.__combobox) selAluno.__combobox.sync();
+  }
 
-  const win = window.open('', '_blank');
-  if (!win) {
-    toast('Não foi possível abrir janela de impressão. Verifique seu bloqueador de pop-ups.', 'warning');
+  const selLivro = $('#emprestimoLivro');
+  if (selLivro) {
+    const atual = selLivro.value;
+    selLivro.innerHTML = '<option value="">Selecione...</option>' +
+      state.livros.map(l => {
+        const disp = disponiveisLivro(l.id);
+        const sufixo = disp > 0 ? `(${disp} disponível(is))` : '(sem exemplares disponíveis)';
+        return `<option value="${l.id}" ${disp === 0 ? 'disabled' : ''}>${escapeHtml(l.titulo)} ${sufixo}</option>`;
+      }).join('');
+    if (atual && state.livros.some(l => String(l.id) === String(atual))) selLivro.value = atual;
+    if (selLivro.__combobox) selLivro.__combobox.sync();
+  }
+}
+
+async function carregarAlunos() {
+  state.alunos = await api('/api/alunos');
+}
+
+async function carregarLivros() {
+  state.livros = await api('/api/livros');
+}
+
+async function carregarEmprestimos() {
+  state.emprestimos = await api('/api/emprestimos');
+}
+
+async function carregarDashboard() {
+  try {
+    state.dashboard = await api('/api/dashboard');
+  } catch (e) {
+    console.error('Erro ao carregar dashboard:', e);
+  }
+}
+
+function disponiveisLivro(livroId) {
+  const livro = state.livros.find(l => l.id === livroId);
+  if (!livro) return 0;
+  const ativos = state.emprestimos.filter(e => e.livroId === livroId && !e.devolvido).length;
+  return Math.max(0, (livro.acervo || 0) - ativos);
+}
+
+function totalEmprestimosLivro(livroId) {
+  return state.emprestimos.filter(e => e.livroId === livroId).length;
+}
+
+async function recarregarTudo() {
+  await Promise.all([carregarAlunos(), carregarLivros(), carregarEmprestimos(), carregarDashboard()]);
+  const passos = [
+    ['renderDashboard', renderDashboard],
+    ['renderAlunos', renderAlunos],
+    ['renderLivros', renderLivros],
+    ['renderEstante', renderEstante],
+    ['renderEmprestimos', renderEmprestimos],
+    ['renderHistoricoAtividades', renderHistoricoAtividades],
+    ['atualizarBadgeNotificacoes', atualizarBadgeNotificacoes],
+    ['popularSelectsEmprestimo', popularSelectsEmprestimo]
+  ];
+  for (const [nome, fn] of passos) {
+    try { fn(); }
+    catch (e) { console.error('[recarregarTudo] falhou em ' + nome + ':', e); }
+  }
+}
+
+// ============================================================
+// DASHBOARD (painel resumo)
+// ============================================================
+
+function renderDashboard() {
+  const d = state.dashboard;
+  if (!d) return;
+
+  $('#statLivros').textContent = d.livrosTitulos ?? 0;
+  $('#statDisponiveis').textContent = d.exemplaresDisponiveis ?? 0;
+  $('#statEmprestados').textContent = d.exemplaresEmprestados ?? 0;
+  $('#statAlunos').textContent = d.alunosTotal ?? 0;
+  $('#statEmprestimosAtivos').textContent = d.emprestimosAtivos ?? 0;
+  $('#statEmprestimosVencidos').textContent = d.emprestimosAtrasados ?? 0;
+  $('#statDevolucoesHoje').textContent = d.devolucoesHoje ?? 0;
+
+  // Banner de alerta
+  const banner = $('#dashboardAlertBanner');
+  if (d.emprestimosAtrasados > 0) {
+    banner.style.display = 'flex';
+    $('#alertBannerTitle').textContent = `Atenção: ${d.emprestimosAtrasados} empréstimo(s) com prazo vencido!`;
+    $('#alertBannerDesc').textContent = 'Alunos precisam devolver livros pendentes.';
+  } else {
+    banner.style.display = 'none';
+  }
+
+  // Devoluções recentes
+  const tbody = $('#devolucoesRecentesBody');
+  const devol = d.devolucoesRecentes || [];
+  if (!devol.length) {
+    tbody.innerHTML = '';
+    $('#devolucoesRecentesEmpty').style.display = 'block';
+  } else {
+    $('#devolucoesRecentesEmpty').style.display = 'none';
+    tbody.innerHTML = devol.map(e => {
+      let conservacao = '—';
+      if (e.estadoSaida && e.estadoDevolucao) {
+        const piorou = estadoPiorou(e.estadoSaida, e.estadoDevolucao);
+        conservacao = `${escapeHtml(e.estadoSaida)} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao)}</strong>${piorou ? ' ⚠️' : ''}`;
+      } else if (e.estadoDevolucao) {
+        conservacao = escapeHtml(e.estadoDevolucao);
+      }
+      return `<tr>
+        <td>${escapeHtml(e.alunoNome)}</td>
+        <td>${escapeHtml(e.alunoTurma)}</td>
+        <td>${escapeHtml(e.livroTitulo)}</td>
+        <td>${formatarData(e.dataDevolucao)}</td>
+        <td>${conservacao}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+// ============================================================
+// ALUNOS
+// ============================================================
+
+function renderAlunos() {
+  const busca = state.buscaAluno.trim().toLowerCase();
+  const lista = state.alunos.filter(a =>
+    !busca || a.nome.toLowerCase().includes(busca) || String(a.turma).toLowerCase().includes(busca)
+  );
+
+  $('#alunosCountSmall').textContent = `${state.alunos.length} aluno(s)`;
+
+  const tbody = $('#alunosBody');
+  if (!lista.length) {
+    tbody.innerHTML = '';
+    $('#alunosEmpty').style.display = 'block';
     return;
   }
-  win.document.write(content);
-  win.document.close();
-  win.focus();
-  win.print();
+  $('#alunosEmpty').style.display = 'none';
+
+  tbody.innerHTML = lista.map(a => `
+    <tr>
+      <td>${escapeHtml(a.nome)}</td>
+      <td><span class="pill">${escapeHtml(a.turma)}</span></td>
+      <td>${a.total ?? 0} (${a.ativos ?? 0} ativo(s))</td>
+      <td>${renderEstrelas(a.nota, a.estrelas)}</td>
+      <td class="table-actions">
+        <div class="inline-actions">
+          <button type="button" class="secondary btn-small" data-editar-aluno="${a.id}">✏️ Editar</button>
+          <button type="button" class="danger btn-small" data-excluir-aluno="${a.id}">🗑️ Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
-function apagarRelatorios() {
-  if (!confirm('Tem certeza que deseja apagar todo o histórico de relatórios?')) return;
-  state.relatorios = [];
-  persistAll();
-  renderAll();
-  toast('Relatórios apagados.', 'success');
-}
+async function cadastrarAluno(e) {
+  e.preventDefault();
+  const nome = $('#alunoNome').value.trim();
+  const turma = $('#alunoTurma').value;
 
-function persistAll() {
-  save(LS_KEYS.alunos, state.alunos);
-  save(LS_KEYS.livros, state.livros);
-  save(LS_KEYS.emprestimos, state.emprestimos);
-  save(LS_KEYS.relatorios, state.relatorios);
-  save(LS_KEYS.prateleira, shelfState);
-}
+  if (!nome) { toast('Informe o nome do aluno.', 'erro'); return; }
+  if (!turma) { toast('Selecione a sala/turma.', 'erro'); return; }
 
-function isCurrentMonth(dateStr) {
-  if (!dateStr) return false;
-  const d = parseDateToLocal(dateStr);
-  if (!d) return false;
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-}
-
-function getAlunoMaisAtivoMesAtual() {
-  const concluido = (state.emprestimos || []).filter(e => e.devolvido && isCurrentMonth(e.dataDevolucao));
-  if (!concluido.length) return null;
-
-  const contagem = {};
-  concluido.forEach(e => {
-    if (!e.alunoId) return;
-    contagem[e.alunoId] = (contagem[e.alunoId] || 0) + 1;
-  });
-
-  const alunoId = Object.keys(contagem).reduce((best, id) => {
-    if (best === null) return id;
-    return contagem[id] > contagem[best] ? id : best;
-  }, null);
-
-  if (!alunoId) return null;
-
-  const aluno = state.alunos.find(a => String(a.id) === String(alunoId));
-  return aluno ? { ...aluno, quantidade: contagem[alunoId] } : null;
-}
-
-function getLivroMaisLidoMesAtual() {
-  const realizados = (state.emprestimos || []).filter(e => isCurrentMonth(e.dataRetirada));
-  if (!realizados.length) return null;
-
-  const contagem = {};
-  realizados.forEach(e => {
-    if (!e.livroId) return;
-    contagem[e.livroId] = (contagem[e.livroId] || 0) + 1;
-  });
-
-  const livroId = Object.keys(contagem).reduce((best, id) => {
-    if (best === null) return id;
-    return contagem[id] > contagem[best] ? id : best;
-  }, null);
-
-  if (!livroId) return null;
-
-  const livro = state.livros.find(l => String(l.id) === String(livroId));
-  return livro ? { ...livro, quantidade: contagem[livroId] } : null;
-}
-
-function renderRanking() {
-  const alunoCard = $('#rankingAlunoCard');
-  const livroCard = $('#rankingLivroCard');
-  if (!alunoCard || !livroCard) return;
-
-  const aluno = getAlunoMaisAtivoMesAtual();
-  const livro = getLivroMaisLidoMesAtual();
-
-  alunoCard.innerHTML = aluno ? `
-    <div class="card-header">
-      <div>
-        <h2>🏆 Aluno Mais Ativo do Mês</h2>
-        <small class="muted">Concluiu empréstimos neste mês</small>
-      </div>
-    </div>
-    <div class="card-body">
-      <p style="font-weight:900; font-size:18px; margin:0 0 12px;">${escapeHtml(aluno.nome)}</p>
-      <p style="margin:0 0 8px; color:var(--muted);">Turma: ${escapeHtml(aluno.turma)}</p>
-      <p style="margin:0; font-weight:900;">📚 Livros lidos: ${Number(aluno.quantidade)}</p>
-    </div>
-  ` : `
-    <div class="card-header">
-      <div>
-        <h2>🏆 Aluno Mais Ativo do Mês</h2>
-        <small class="muted">Concluiu empréstimos neste mês</small>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="empty">Nenhum dado disponível neste mês.</div>
-    </div>
-  `;
-
-  livroCard.innerHTML = livro ? `
-    <div class="card-header">
-      <div>
-        <h2>📚 Livro Mais Lido do Mês</h2>
-        <small class="muted">Empréstimos realizados neste mês</small>
-      </div>
-    </div>
-    <div class="card-body">
-      <p style="font-weight:900; font-size:18px; margin:0 0 12px;">${escapeHtml(livro.titulo)}</p>
-      <p style="margin:0 0 8px; color:var(--muted);">Autor: ${escapeHtml(livro.autor)}</p>
-      <p style="margin:0; font-weight:900;">🔄 Empréstimos: ${Number(livro.quantidade)}</p>
-    </div>
-  ` : `
-    <div class="card-header">
-      <div>
-        <h2>📚 Livro Mais Lido do Mês</h2>
-        <small class="muted">Empréstimos realizados neste mês</small>
-      </div>
-    </div>
-    <div class="card-body">
-      <div class="empty">Nenhum dado disponível neste mês.</div>
-    </div>
-  `;
-}
-
-function registrarDevolucao(emprestimoId) {
-  const e = (state.emprestimos || []).find(x => String(x.id) === String(emprestimoId));
-  if (!e || e.devolvido) return;
-  e.devolvido = true;
-  e.dataDevolucao = getTodayDateStr();
-
-  const aluno = (state.alunos || []).find(a => String(a.id) === String(e.alunoId));
-  const livro = (state.livros || []).find(l => String(l.id) === String(e.livroId));
-  addRelatorio(`${aluno?.nome || 'Aluno'} devolveu o livro '${livro?.titulo || ''}' ${formatarDataHoraExtenso()}.`);
-
-  persistAll();
-  renderAll();
-  toast(`Devolução do livro "${livro?.titulo || 'Livro'}" registrada!`, 'success');
-}
-
-function popularLivrosExemplo() {
-  const exemplos = [
-    { titulo: 'Dom Casmurro', autor: 'Machado de Assis', categoria: 'Romance', acervo: 3 },
-    { titulo: 'O Pequeno Príncipe', autor: 'Antoine de Saint-Exupéry', categoria: 'Fantasia', acervo: 4 },
-    { titulo: '1984', autor: 'George Orwell', categoria: 'Ficção Científica', acervo: 3 },
-    { titulo: 'Harry Potter e a Pedra Filosofal', autor: 'J.K. Rowling', categoria: 'Fantasia', acervo: 5 },
-    { titulo: 'O Senhor dos Anéis', autor: 'J.R.R. Tolkien', categoria: 'Fantasia', acervo: 2 },
-    { titulo: 'A Hora da Estrela', autor: 'Clarice Lispector', categoria: 'Romance', acervo: 3 },
-    { titulo: 'Memórias Póstumas de Brás Cubas', autor: 'Machado de Assis', categoria: 'Romance', acervo: 4 },
-    { titulo: 'Duna', autor: 'Frank Herbert', categoria: 'Ficção Científica', acervo: 2 },
-    { titulo: 'O Alquimista', autor: 'Paulo Coelho', categoria: 'Aventura', acervo: 4 },
-    { titulo: 'Sherlock Holmes: Um Estudo em Vermelho', autor: 'Arthur Conan Doyle', categoria: 'Suspense', acervo: 3 },
-    { titulo: 'O Menino Maluquinho', autor: 'Ziraldo', categoria: 'Comédia', acervo: 5 },
-    { titulo: 'Sapiens: Uma Breve História da Humanidade', autor: 'Yuval Noah Harari', categoria: 'História', acervo: 3 },
-    { titulo: 'O Diário de Anne Frank', autor: 'Anne Frank', categoria: 'Biografia', acervo: 3 },
-    { titulo: 'Capitães da Areia', autor: 'Jorge Amado', categoria: 'Romance', acervo: 4 },
-    { titulo: 'Vidas Secas', autor: 'Graciliano Ramos', categoria: 'Romance', acervo: 3 },
-    { titulo: 'Neuromancer', autor: 'William Gibson', categoria: 'Ficção Científica', acervo: 2 },
-    { titulo: 'Assassinato no Expresso do Oriente', autor: 'Agatha Christie', categoria: 'Suspense', acervo: 3 },
-    { titulo: 'Percy Jackson e o Ladrão de Raios', autor: 'Rick Riordan', categoria: 'Aventura', acervo: 4 },
-    { titulo: 'O Cortiço', autor: 'Aluísio Azevedo', categoria: 'Romance', acervo: 3 },
-    { titulo: 'Fundação', autor: 'Isaac Asimov', categoria: 'Ficção Científica', acervo: 3 }
-  ];
-
-  let added = 0;
-  exemplos.forEach(ex => {
-    const exists = state.livros.some(l => normalize(l.titulo) === normalize(ex.titulo));
-    if (!exists) {
-      state.livros.push({
-        id: uid(),
-        titulo: ex.titulo,
-        autor: ex.autor,
-        categoria: ex.categoria,
-        acervo: ex.acervo,
-        criadoEm: new Date().toISOString()
-      });
-      added++;
-    }
-  });
-
-  if (added > 0) {
-    addRelatorio(`Foram adicionados ${added} livros de exemplo ao acervo ${formatarDataHoraExtenso()}.`);
-    persistAll();
-    renderAll();
-    toast(`${added} livros de exemplo adicionados com sucesso!`, 'success');
-  } else {
-    toast('Os livros de exemplo já estão cadastrados.', 'info');
+  try {
+    await api('/api/alunos', { method: 'POST', body: { nome, turma } });
+    $('#alunoNome').value = '';
+    $('#alunoTurma').value = '';
+    toast(`Aluno "${nome}" cadastrado com sucesso!`);
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
   }
 }
 
-function renderAll() {
-  ensureSelectOptions();
-  renderStats();
-  renderLivrosDisponiveisSmall();
-  renderLivrosTable();
-  renderAlunosTable();
-  renderEmprestimosTable();
-  renderNotificationsAndAlerts();
-  renderPrateleiraVirtual();
-  renderRelatorios();
-  renderRelatorioResumo();
-  renderRanking();
+function abrirEditarAluno(id) {
+  const aluno = state.alunos.find(a => a.id === id);
+  if (!aluno) return;
+  state.editandoAlunoId = id;
+  $('#editarAlunoNome').value = aluno.nome;
+  popularSelectTurmas($('#editarAlunoTurma'));
+  $('#editarAlunoTurma').value = aluno.turma;
+  abrirModal('#modalEditarAluno');
 }
 
-// ==========================================
-// WIRE EVENTS
-// ==========================================
+async function salvarEdicaoAluno() {
+  const nome = $('#editarAlunoNome').value.trim();
+  const turma = $('#editarAlunoTurma').value;
+  if (!nome) { toast('Informe o nome do aluno.', 'erro'); return; }
+  if (!turma) { toast('Selecione a sala/turma.', 'erro'); return; }
 
-function wireEvents() {
-  // 1. FORMULÁRIO DE LIVROS
-  $('#livroForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
+  try {
+    await api(`/api/alunos/${state.editandoAlunoId}`, { method: 'PUT', body: { nome, turma } });
+    fecharModal('#modalEditarAluno');
+    toast('Aluno atualizado com sucesso!');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-    const titulo = $('#livroTitulo')?.value || '';
-    const autor = $('#livroAutor')?.value || '';
-    const categoria = $('#livroCategoria')?.value || '';
-    const acervo = $('#livroAcervo')?.value || 1;
+async function excluirAluno(id) {
+  const aluno = state.alunos.find(a => a.id === id);
+  if (!aluno) return;
+  if (!confirm(`Excluir o aluno "${aluno.nome}"?\n\nO histórico de empréstimos concluídos dele também será removido.`)) return;
+  try {
+    await api(`/api/alunos/${id}`, { method: 'DELETE' });
+    toast('Aluno excluído com sucesso.');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-    if (!titulo.trim() || !autor.trim() || !categoria.trim()) {
-      toast('Preencha título, autor e categoria.', 'warning');
-      return;
-    }
+function exportarAlunos() {
+  baixarCSV('alunos.csv', [
+    ['Nome', 'Turma', 'Empréstimos', 'Devolvidos', 'Atrasos', 'Nota', 'Estrelas'],
+    ...state.alunos.map(a => [a.nome, a.turma, a.total ?? 0, a.concluidos ?? 0, a.atrasos ?? 0, a.nota ?? 5, a.estrelas ?? ''])
+  ]);
+}
 
-    if (editingLivroId) {
-      const l = state.livros.find(x => String(x.id) === String(editingLivroId));
-      if (l) {
-        l.titulo = titulo.trim();
-        l.autor = autor.trim();
-        l.categoria = categoria.trim();
-        l.acervo = Number(acervo || 1);
-        addRelatorio(`Livro '${l.titulo}' foi editado ${formatarDataHoraExtenso()}.`);
+// ---------------- Importação DED ----------------
+
+function parseDedTexto(texto, turmaPadrao) {
+  const resultados = [];
+  const linhas = String(texto || '').split(/\r?\n/);
+
+  for (let linha of linhas) {
+    linha = linha.trim();
+    if (!linha) continue;
+
+    // CSV com ; ou tab
+    let partes = linha.includes(';') ? linha.split(';') : (linha.includes('\t') ? linha.split('\t') : null);
+    if (partes && partes.length >= 2) {
+      const nome = partes[0].trim();
+      const turma = (partes[1] || turmaPadrao || '').trim();
+      if (nome && nome.length > 2 && !/^\d+$/.test(nome)) {
+        resultados.push({ nome, turma });
+        continue;
       }
-      editingLivroId = null;
-      resetLivroFormUI();
-      persistAll();
-      toast('Livro atualizado com sucesso!', 'success');
-      $('#livroForm')?.reset?.();
-      renderAll();
-      return;
     }
 
-    state.livros.push({
-      id: uid(),
-      titulo: titulo.trim(),
-      autor: autor.trim(),
-      categoria: categoria.trim(),
-      acervo: Number(acervo || 1),
-      criadoEm: new Date().toISOString()
-    });
-
-    addRelatorio(`Livro '${titulo.trim()}' cadastrado ${formatarDataHoraExtenso()}.`);
-    persistAll();
-    toast('Livro cadastrado com sucesso!', 'success');
-    $('#livroForm')?.reset?.();
-    renderAll();
-  });
-
-  // 2. FORMULÁRIO DE ALUNOS
-  $('#alunoForm')?.addEventListener('submit', (e) => {
-    e.preventDefault();
-
-    const nome = $('#alunoNome')?.value || '';
-    const turma = $('#alunoTurma')?.value || '';
-
-    if (!nome.trim() || !turma.trim()) {
-      toast('Preencha nome e turma.', 'warning');
-      return;
-    }
-
-    if (editingAlunoId) {
-      const a = state.alunos.find(x => String(x.id) === String(editingAlunoId));
-      if (a) {
-        a.nome = nome.trim();
-        a.turma = turma.trim();
-        addRelatorio(`Aluno ${a.nome} foi editado ${formatarDataHoraExtenso()}.`);
+    // Formato colunar: "1  1234567  Maria Silva Santos  7ºA"
+    const colunas = linha.split(/\s{2,}|\t+/).map(s => s.trim()).filter(Boolean);
+    if (colunas.length >= 2) {
+      const turmaCand = colunas[colunas.length - 1];
+      const pareceTurma = /^\d{1,2}\s*[°º]?\s*[A-Da-d]?$/.test(turmaCand.replace(/\s*ANO\s*/i, ' '));
+      if (pareceTurma) {
+        const nome = colunas.slice(0, -1).filter(c => !/^\d+$/.test(c)).join(' ');
+        if (nome && nome.length > 2) {
+          resultados.push({ nome, turma: turmaCand });
+          continue;
+        }
       }
-      editingAlunoId = null;
-      resetAlunoFormUI();
-      persistAll();
-      toast('Aluno atualizado com sucesso!', 'success');
-      $('#alunoForm')?.reset?.();
-      renderAll();
-      return;
     }
 
-    state.alunos.push({
-      id: uid(),
-      nome: nome.trim(),
-      turma: turma.trim(),
-      criadoEm: new Date().toISOString()
+    // Linha simples: nome no meio, turma no fim (ex.: "1 1234567 Maria Silva 7ºA")
+    const m = linha.match(/^(?:\d+\s+)?(?:\d{4,}\s+)?(.+?)\s+(\d{1,2}\s*[°º]?\s*[A-Da-d])$/);
+    if (m) {
+      const nome = m[1].replace(/\s{2,}/g, ' ').trim();
+      if (nome.length > 2 && !/^\d+$/.test(nome)) {
+        resultados.push({ nome, turma: m[2] });
+        continue;
+      }
+    }
+
+    // Apenas nome (usa turma padrão)
+    const soNome = linha.replace(/^\d+\s+/, '').replace(/^\d{4,}\s+/, '').trim();
+    if (soNome.length > 2 && /[a-zA-ZÀ-ÿ]/.test(soNome) && !/^\d+$/.test(soNome) && turmaPadrao) {
+      resultados.push({ nome: soNome, turma: turmaPadrao });
+    }
+  }
+  return resultados;
+}
+
+function processarDed() {
+  const texto = $('#dedTextoInput').value;
+  const turmaPadrao = $('#dedTurmaPadrao').value;
+  if (!texto.trim()) { toast('Cole o texto ou carregue um arquivo primeiro.', 'aviso'); return; }
+
+  const alunos = parseDedTexto(texto, turmaPadrao);
+  if (!alunos.length) {
+    toast('Nenhum aluno identificado. Verifique o formato.', 'aviso');
+    return;
+  }
+
+  state.dedPreview = alunos;
+  $('#dedTotalEncontrados').textContent = alunos.length;
+  $('#dedPreviewContainer').style.display = 'block';
+
+  const nomesExistentes = new Set(state.alunos.map(a => a.nome.toLowerCase()));
+  $('#dedPreviewBody').innerHTML = alunos.map((a, i) => {
+    const duplicado = $('#dedIgnorarDuplicados').checked && nomesExistentes.has(a.nome.toLowerCase());
+    return `<tr>
+      <td style="padding:8px 12px;">${i + 1}</td>
+      <td style="padding:8px 12px;">${escapeHtml(a.nome)}</td>
+      <td style="padding:8px 12px;">${escapeHtml(a.turma || '(sem turma)')}</td>
+      <td style="padding:8px 12px;">${duplicado ? '<span class="status-pill badge-warning">Duplicado</span>' : '<span class="status-pill badge-ok">Novo</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  $('#btnDedConfirmarImportacao').disabled = false;
+}
+
+async function confirmarImportacaoDed() {
+  const ignorarDuplicados = $('#dedIgnorarDuplicados').checked;
+  const nomesExistentes = new Set(state.alunos.map(a => a.nome.toLowerCase()));
+
+  let importados = 0, ignorados = 0;
+  for (const a of state.dedPreview) {
+    if (!a.turma) { ignorados++; continue; }
+    if (ignorarDuplicados && nomesExistentes.has(a.nome.toLowerCase())) { ignorados++; continue; }
+    try {
+      await api('/api/alunos', { method: 'POST', body: { nome: a.nome, turma: a.turma } });
+      nomesExistentes.add(a.nome.toLowerCase());
+      importados++;
+    } catch (e) {
+      ignorados++;
+    }
+  }
+
+  fecharModal('#modalImportarDed');
+  $('#dedTextoInput').value = '';
+  $('#dedPreviewContainer').style.display = 'none';
+  $('#btnDedConfirmarImportacao').disabled = true;
+  toast(`Importação concluída: ${importados} aluno(s) importado(s), ${ignorados} ignorado(s).`);
+  await recarregarTudo();
+}
+
+// ============================================================
+// LIVROS
+// ============================================================
+
+function renderLivros() {
+  const busca = state.buscaLivro.trim().toLowerCase();
+  let lista = state.livros.filter(l =>
+    !busca || l.titulo.toLowerCase().includes(busca) || l.autor.toLowerCase().includes(busca) || l.categoria.toLowerCase().includes(busca)
+  );
+
+  const ordem = state.ordemLivros;
+  if (ordem === 'alfabetica-asc') lista.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
+  else if (ordem === 'alfabetica-desc') lista.sort((a, b) => b.titulo.localeCompare(a.titulo, 'pt-BR'));
+  else if (ordem === 'autor') lista.sort((a, b) => a.autor.localeCompare(b.autor, 'pt-BR'));
+  else if (ordem === 'mais-emprestados') lista.sort((a, b) => totalEmprestimosLivro(b.id) - totalEmprestimosLivro(a.id));
+  else if (ordem === 'menos-emprestados') lista.sort((a, b) => totalEmprestimosLivro(a.id) - totalEmprestimosLivro(b.id));
+  else if (ordem === 'disponiveis') lista.sort((a, b) => disponiveisLivro(b.id) - disponiveisLivro(a.id));
+
+  const totalExemplares = state.livros.reduce((s, l) => s + (l.acervo || 0), 0);
+  const totalEmprestados = state.emprestimos.filter(e => !e.devolvido).length;
+  $('#livrosCountSmall').textContent = `${state.livros.length} livro(s)`;
+  $('#livrosDisponiveisSmall').textContent = `${Math.max(0, totalExemplares - totalEmprestados)} disponíveis`;
+
+  const tbody = $('#livrosBody');
+  if (!lista.length) {
+    tbody.innerHTML = '';
+    $('#livrosEmpty').style.display = 'block';
+    return;
+  }
+  $('#livrosEmpty').style.display = 'none';
+
+  if (ordem === 'categoria') {
+    // Agrupado por categoria com linhas divisórias
+    const grupos = new Map();
+    for (const l of lista) {
+      if (!grupos.has(l.categoria)) grupos.set(l.categoria, []);
+      grupos.get(l.categoria).push(l);
+    }
+    const cats = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    let html = '';
+    for (const cat of cats) {
+      const livros = grupos.get(cat);
+      html += `<tr class="table-category-header"><td colspan="7">📂 ${escapeHtml(cat)} — ${livros.length} livro(s)</td></tr>`;
+      html += livros.map(l => linhaLivro(l)).join('');
+    }
+    tbody.innerHTML = html;
+  } else {
+    tbody.innerHTML = lista.map(l => linhaLivro(l)).join('');
+  }
+}
+
+function linhaLivro(l) {
+  const disp = disponiveisLivro(l.id);
+  return `<tr>
+    <td>${capaThumbHTML(l)}</td>
+    <td>${escapeHtml(l.titulo)}</td>
+    <td>${escapeHtml(l.autor)}</td>
+    <td><span class="pill">${escapeHtml(l.categoria)}</span></td>
+    <td>${l.acervo}</td>
+    <td><strong style="color: ${disp > 0 ? '#15803d' : 'var(--danger)'};">${disp}</strong></td>
+    <td class="table-actions">
+      <div class="inline-actions">
+        <button type="button" class="secondary btn-small" data-etiqueta-livro="${l.id}">🏷️ Etiqueta</button>
+        <button type="button" class="secondary btn-small" data-editar-livro="${l.id}">✏️ Editar</button>
+        <button type="button" class="danger btn-small" data-excluir-livro="${l.id}">🗑️</button>
+      </div>
+    </td>
+  </tr>`;
+}
+
+async function cadastrarLivro(e) {
+  e.preventDefault();
+  const titulo = $('#livroTitulo').value.trim();
+  const autor = $('#livroAutor').value.trim();
+  const categoria = $('#livroCategoria').value;
+  const acervo = parseInt($('#livroAcervo').value, 10) || 1;
+  const capaUrl = $('#livroCapa').value.trim();
+
+  if (!titulo || !autor || !categoria) { toast('Preencha título, autor e categoria.', 'erro'); return; }
+
+  try {
+    await api('/api/livros', { method: 'POST', body: { titulo, autor, categoria, acervo, capaUrl: capaUrl || null } });
+    $('#livroTitulo').value = '';
+    $('#livroAutor').value = '';
+    $('#livroCategoria').value = '';
+    $('#livroAcervo').value = '1';
+    $('#livroCapa').value = '';
+    atualizarPreviewCapa();
+    toast(`Livro "${titulo}" cadastrado com sucesso!`);
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+function atualizarPreviewCapa() {
+  const url = $('#livroCapa').value.trim();
+  const img = $('#livroCapaPreview');
+  if (url) {
+    img.src = url;
+    img.style.display = 'block';
+    img.onerror = () => { img.style.display = 'none'; };
+  } else {
+    img.style.display = 'none';
+  }
+}
+
+function abrirEditarLivro(id) {
+  const livro = state.livros.find(l => l.id === id);
+  if (!livro) return;
+  state.editandoLivroId = id;
+  $('#editarLivroTitulo').value = livro.titulo;
+  $('#editarLivroAutor').value = livro.autor;
+  $('#editarLivroCategoria').value = livro.categoria;
+  $('#editarLivroAcervo').value = livro.acervo;
+  $('#editarLivroCapa').value = livro.capaUrl || '';
+  abrirModal('#modalEditarLivro');
+}
+
+async function salvarEdicaoLivro() {
+  const titulo = $('#editarLivroTitulo').value.trim();
+  const autor = $('#editarLivroAutor').value.trim();
+  const categoria = $('#editarLivroCategoria').value;
+  const acervo = parseInt($('#editarLivroAcervo').value, 10) || 1;
+  const capaUrl = $('#editarLivroCapa').value.trim();
+
+  if (!titulo || !autor || !categoria) { toast('Preencha título, autor e categoria.', 'erro'); return; }
+
+  try {
+    await api(`/api/livros/${state.editandoLivroId}`, { method: 'PUT', body: { titulo, autor, categoria, acervo, capaUrl: capaUrl || null } });
+    fecharModal('#modalEditarLivro');
+    toast('Livro atualizado com sucesso!');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function excluirLivro(id) {
+  const livro = state.livros.find(l => l.id === id);
+  if (!livro) return;
+  if (!confirm(`Excluir o livro "${livro.titulo}"?\n\nO histórico de empréstimos concluídos dele também será removido.`)) return;
+  try {
+    await api(`/api/livros/${id}`, { method: 'DELETE' });
+    toast('Livro excluído com sucesso.');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+function exportarLivros() {
+  baixarCSV('livros.csv', [
+    ['Título', 'Autor', 'Categoria', 'Exemplares', 'Disponíveis', 'URL da capa'],
+    ...state.livros.map(l => [l.titulo, l.autor, l.categoria, l.acervo, disponiveisLivro(l.id), l.capaUrl || ''])
+  ]);
+}
+
+// ---------------- Etiqueta QR ----------------
+
+function abrirEtiqueta(id) {
+  const livro = state.livros.find(l => l.id === id);
+  if (!livro) return;
+
+  $('#labelBookTitle').textContent = livro.titulo;
+  $('#labelBookAuthor').textContent = livro.autor;
+  $('#labelBookCategory').textContent = livro.categoria;
+  $('#labelBookCopies').textContent = `${livro.acervo} exemplar(es)`;
+
+  const container = $('#qrCodeContainer');
+  container.innerHTML = '';
+
+  if (typeof QRCode !== 'undefined') {
+    try {
+      new QRCode(container, {
+        text: `LIVRO:${livro.id}:${livro.titulo}`,
+        width: 120,
+        height: 120
+      });
+    } catch (e) {
+      container.innerHTML = '<div style="font-size:11px;color:#94a3b8;">QR indisponível</div>';
+    }
+  } else {
+    container.innerHTML = '<div style="font-size:11px;color:#94a3b8;text-align:center;padding:40px 8px;">Biblioteca QR não carregada (assets/js/vendor/qrcode.min.js ausente)</div>';
+  }
+
+  abrirModal('#modalQrEtiqueta');
+}
+
+// ---------------- Scanner QR / ISBN ----------------
+
+let html5Scanner = null;
+
+function abrirScanner(contexto) {
+  state.scannerContexto = contexto;
+  abrirModal('#modalQrScanner');
+  mostrarFeedbackScanner('');
+
+  // Câmera só funciona se a biblioteca vendor estiver carregada
+  if (typeof Html5Qrcode === 'undefined') {
+    mostrarFeedbackScanner('📷 Leitura por câmera indisponível: biblioteca html5-qrcode não encontrada em assets/js/vendor/. Use a digitação manual abaixo.', 'aviso');
+    return;
+  }
+
+  try {
+    html5Scanner = new Html5Qrcode('qrReaderElem');
+    html5Scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (textoDecodificado) => {
+        mostrarFeedbackScanner(`Código lido: ${textoDecodificado}`, 'ok');
+        processarCodigoLido(textoDecodificado);
+      }
+    ).catch(() => {
+      mostrarFeedbackScanner('Não foi possível acessar a câmera. Use a digitação manual.', 'erro');
     });
+  } catch (e) {
+    mostrarFeedbackScanner('Erro ao iniciar o leitor. Use a digitação manual.', 'erro');
+  }
+}
 
-    addRelatorio(`Aluno ${nome.trim()} cadastrado ${formatarDataHoraExtenso()}.`);
-    persistAll();
-    toast('Aluno cadastrado com sucesso!', 'success');
-    $('#alunoForm')?.reset?.();
-    renderAll();
+async function fecharScanner() {
+  if (html5Scanner) {
+    try { await html5Scanner.stop(); } catch (e) {}
+    try { html5Scanner.clear(); } catch (e) {}
+    html5Scanner = null;
+  }
+  fecharModal('#modalQrScanner');
+}
+
+function mostrarFeedbackScanner(msg, tipo) {
+  const el = $('#scannerFeedback');
+  if (!el) return;
+  el.style.display = msg ? 'block' : 'none';
+  el.textContent = msg;
+  el.style.background = tipo === 'erro' ? '#fee2e2' : tipo === 'aviso' ? '#fef3c7' : '#dcfce7';
+  el.style.color = tipo === 'erro' ? '#991b1b' : tipo === 'aviso' ? '#92400e' : '#166534';
+}
+
+async function processarCodigoLido(codigo) {
+  const isbn = String(codigo).replace(/[^0-9Xx]/g, '');
+  if (state.scannerContexto === 'emprestimo') {
+    // Localiza livro pelo título contendo o código ou abre busca
+    const livro = state.livros.find(l => l.titulo.toLowerCase().includes(codigo.toLowerCase()));
+    if (livro) {
+      const sel = $('#emprestimoLivro');
+      sel.value = String(livro.id);
+      if (sel.__combobox) sel.__combobox.sync();
+      await fecharScanner();
+      toast(`Livro "${livro.titulo}" selecionado!`);
+    } else if (isbn.length >= 10) {
+      await buscarIsbnEPreencher(isbn, true);
+    } else {
+      mostrarFeedbackScanner('Livro não encontrado pelo código. Tente buscar pelo ISBN.', 'aviso');
+    }
+  } else {
+    if (isbn.length >= 10) {
+      await buscarIsbnEPreencher(isbn, false);
+    } else {
+      mostrarFeedbackScanner(`Código "${codigo}" não parece um ISBN.`, 'aviso');
+    }
+  }
+}
+
+async function buscarIsbnEPreencher(isbn, selecionarEmprestimo) {
+  mostrarFeedbackScanner(`Buscando ISBN ${isbn} nas bases públicas...`, 'ok');
+  try {
+    const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+    if (!res.ok) throw new Error('não encontrado');
+    const dados = await res.json();
+    const titulo = dados.title || '';
+    let autor = '';
+    if (dados.authors && dados.authors.length) {
+      try {
+        const resAutor = await fetch(`https://openlibrary.org${dados.authors[0].key}.json`);
+        const dadosAutor = await resAutor.json();
+        autor = dadosAutor.name || '';
+      } catch (e) {}
+    }
+    if (!titulo) throw new Error('sem título');
+
+    if (selecionarEmprestimo) {
+      const livro = state.livros.find(l => l.titulo.toLowerCase() === titulo.toLowerCase());
+      if (livro) {
+        const sel = $('#emprestimoLivro');
+        sel.value = String(livro.id);
+        if (sel.__combobox) sel.__combobox.sync();
+        await fecharScanner();
+        toast(`Livro "${livro.titulo}" selecionado!`);
+        return;
+      }
+    }
+
+    $('#livroTitulo').value = titulo;
+    if (autor) $('#livroAutor').value = autor;
+    await fecharScanner();
+    toast(`Dados do ISBN preenchidos! Verifique e cadastre o livro.`);
+  } catch (e) {
+    mostrarFeedbackScanner('ISBN não encontrado nas bases públicas. Preencha manualmente.', 'erro');
+  }
+}
+
+function buscarManualScanner() {
+  const codigo = $('#scannerManualInput').value.trim();
+  if (!codigo) { toast('Digite um código/ISBN.', 'aviso'); return; }
+  processarCodigoLido(codigo);
+}
+
+// ============================================================
+// ESTANTE (cards com capas)
+// ============================================================
+
+function statusLivroEstante(livro) {
+  const disp = disponiveisLivro(livro.id);
+  if (disp > 0) return { chave: 'disponivel', label: 'Disponível', pill: 'badge-ok' };
+  if ((livro.acervo || 0) > 0) return { chave: 'emprestado', label: 'Emprestado', pill: 'badge-overdue' };
+  return { chave: 'indisponivel', label: 'Indisponível', pill: 'badge-returned' };
+}
+
+function renderEstante() {
+  const { groupBy, sortBy, categoria, status, busca } = state.shelf;
+
+  $('#estanteTotalLivros').textContent = `${state.livros.length} livro(s) no acervo`;
+
+  // Popula filtro de categorias (uma vez)
+  const filtroCat = $('#shelfFilterCategory');
+  const catAtual = filtroCat.value;
+  const categorias = [...new Set(state.livros.map(l => l.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  filtroCat.innerHTML = '<option value="">Todas as Categorias</option>' +
+    categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  if (categorias.includes(catAtual)) filtroCat.value = catAtual;
+
+  let lista = [...state.livros];
+  if (categoria) lista = lista.filter(l => l.categoria === categoria);
+  if (status) lista = lista.filter(l => statusLivroEstante(l).chave === status);
+  if (busca.trim()) {
+    const b = busca.trim().toLowerCase();
+    lista = lista.filter(l => l.titulo.toLowerCase().includes(b) || l.autor.toLowerCase().includes(b));
+  }
+
+  // Ordenação
+  if (sortBy === 'titulo-asc') lista.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
+  else if (sortBy === 'titulo-desc') lista.sort((a, b) => b.titulo.localeCompare(a.titulo, 'pt-BR'));
+  else if (sortBy === 'autor-asc') lista.sort((a, b) => a.autor.localeCompare(b.autor, 'pt-BR'));
+  else if (sortBy === 'acervo-desc') lista.sort((a, b) => b.acervo - a.acervo);
+  else if (sortBy === 'recentes') lista.sort((a, b) => (b.id || 0) - (a.id || 0));
+  else if (sortBy === 'populares') lista.sort((a, b) => totalEmprestimosLivro(b.id) - totalEmprestimosLivro(a.id));
+
+  const container = $('#shelfContainer');
+  if (!lista.length) {
+    container.innerHTML = '<div class="empty">Nenhum livro encontrado com os filtros atuais.</div>';
+    return;
+  }
+
+  // Agrupamento (usado por ambas as visualizações)
+  const grupos = new Map();
+  if (groupBy !== 'nenhum') {
+    for (const l of lista) {
+      let chave;
+      if (groupBy === 'categoria') chave = l.categoria;
+      else if (groupBy === 'autor') chave = l.autor;
+      else chave = statusLivroEstante(l).label;
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave).push(l);
+    }
+  }
+
+  const iconeGrupo = groupBy === 'categoria' ? '📂' : groupBy === 'autor' ? '✍️' : '🟢';
+
+  // ===== Visualização 1: Estante de madeira com livros em pé (lombadas 3D) =====
+  if (state.shelfView === 'spines') {
+    if (groupBy === 'nenhum') {
+      container.innerHTML = secaoEstanteMadeira('🏢 Acervo completo', lista, iconeGrupo, false);
+    } else {
+      const chaves = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      container.innerHTML = chaves.map(chave =>
+        secaoEstanteMadeira(`${iconeGrupo} ${chave}`, grupos.get(chave), iconeGrupo, true)
+      ).join('');
+    }
+    return;
+  }
+
+  // ===== Visualização 2: Catálogo em cards com capas =====
+  if (groupBy === 'nenhum') {
+    container.innerHTML = `<div class="estante-grid">${lista.map(cardEstante).join('')}</div>`;
+  } else {
+    const chaves = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    container.innerHTML = chaves.map(chave => `
+      <div class="wood-shelf-section">
+        <div class="wood-shelf-header">
+          <div class="wood-shelf-title">${iconeGrupo} ${escapeHtml(chave)}</div>
+          <span class="wood-shelf-count">${grupos.get(chave).length} livro(s)</span>
+        </div>
+        <div style="padding: 16px;">
+          <div class="estante-grid">${grupos.get(chave).map(cardEstante).join('')}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+/**
+ * Monta uma seção de estante de madeira com os livros em pé (lombadas 3D).
+ * Cada lombada mostra o título vertical, ícone e ponto de status (verde = disponível, vermelho = emprestado).
+ */
+function secaoEstanteMadeira(titulo, livros, iconeGrupo, comHeader) {
+  const lombadas = livros.map(livro => {
+    const st = statusLivroEstante(livro);
+    const fora = st.chave !== 'disponivel';
+    return `
+      <div class="spine-book" data-detalhes-livro="${livro.id}"
+           style="background: linear-gradient(180deg, ${corCapa(livro.titulo)}, ${corCapa(livro.titulo)}b3);"
+           title="${escapeHtml(livro.titulo)} — ${escapeHtml(livro.autor)} (${st.label})">
+        <span class="spine-icon">📖</span>
+        <span class="spine-title">${escapeHtml(livro.titulo)}</span>
+        <span class="spine-status-dot ${fora ? 'out' : ''}"></span>
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="wood-shelf-section">
+      ${comHeader ? `
+      <div class="wood-shelf-header">
+        <div class="wood-shelf-title">${escapeHtml(titulo)}</div>
+        <span class="wood-shelf-count">${livros.length} livro(s)</span>
+      </div>` : ''}
+      <div class="wood-shelf-stage">
+        <div class="shelf-books-row">${lombadas}</div>
+        <div class="wood-plank"></div>
+      </div>
+    </div>
+  `;
+}
+
+function cardEstante(livro) {
+  const st = statusLivroEstante(livro);
+  const disp = disponiveisLivro(livro.id);
+  const capa = livro.capaUrl
+    ? `<img src="${escapeHtml(livro.capaUrl)}" alt="Capa de ${escapeHtml(livro.titulo)}" loading="lazy"
+         onerror="this.style.display='none'; this.parentElement.querySelector('.placeholder').style.display='flex';" />
+       <div class="placeholder" style="display:none;"><span class="emoji">📖</span><span>${escapeHtml(livro.titulo)}</span></div>`
+    : `<div class="placeholder"><span class="emoji">📖</span><span>${escapeHtml(livro.titulo)}</span></div>`;
+
+  return `
+    <div class="estante-card" data-detalhes-livro="${livro.id}" title="Ver detalhes">
+      <div class="estante-cover">${capa}
+        <span class="status-pill ${st.pill}" style="position:absolute; top:8px; right:8px; z-index:2; box-shadow:0 2px 8px rgba(0,0,0,0.25);">${st.label}</span>
+      </div>
+      <div class="estante-body">
+        <div class="estante-title">${escapeHtml(livro.titulo)}</div>
+        <div class="estante-author">${escapeHtml(livro.autor)}</div>
+        <div class="estante-footer">
+          <span class="estante-categoria">${escapeHtml(livro.categoria)}</span>
+          <small class="muted" style="font-weight:900;">${disp} disp.</small>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function abrirDetalhesLivro(id) {
+  const livro = state.livros.find(l => l.id === id);
+  if (!livro) return;
+  const st = statusLivroEstante(livro);
+  const disp = disponiveisLivro(livro.id);
+  const totalEmp = totalEmprestimosLivro(livro.id);
+
+  $('#detalhesTituloModal').textContent = `📖 ${livro.titulo}`;
+  $('#detalhesLivroConteudo').innerHTML = `
+    <div style="display:flex; gap:16px; align-items:flex-start;">
+      <div style="width:120px; height:170px; border-radius:10px; overflow:hidden; flex-shrink:0; background:#f1f5f9; display:flex; align-items:center; justify-content:center;">
+        ${livro.capaUrl
+          ? `<img src="${escapeHtml(livro.capaUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=\"font-size:48px;\">📖</span>'" />`
+          : `<span style="font-size:48px;">📖</span>`}
+      </div>
+      <div style="flex:1; display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:750;">
+        <div><strong>Autor:</strong> ${escapeHtml(livro.autor)}</div>
+        <div><strong>Categoria:</strong> ${escapeHtml(livro.categoria)}</div>
+        <div><strong>Exemplares:</strong> ${livro.acervo}</div>
+        <div><strong>Disponíveis:</strong> ${disp}</div>
+        <div><strong>Total de empréstimos:</strong> ${totalEmp}</div>
+        <div><span class="status-pill ${st.pill}">${st.label}</span></div>
+      </div>
+    </div>
+  `;
+
+  $('#detalhesLivroAcoes').innerHTML = `
+    <button type="button" class="secondary" data-etiqueta-livro="${livro.id}">🏷️ Etiqueta QR</button>
+    <button type="button" class="secondary" data-editar-livro="${livro.id}">✏️ Editar</button>
+    <button type="button" data-ir-emprestar="${livro.id}">🔄 Emprestar</button>
+  `;
+
+  abrirModal('#modalDetalhesLivro');
+}
+
+function irEmprestar(livroId) {
+  fecharModal('#modalDetalhesLivro');
+  if (window.__activateSection) window.__activateSection('emprestimos');
+  setTimeout(() => {
+    const sel = $('#emprestimoLivro');
+    if (!sel) return;
+    sel.value = String(livroId);
+    if (sel.__combobox) sel.__combobox.sync();
+  }, 100);
+}
+
+// ============================================================
+// EMPRÉSTIMOS
+// ============================================================
+
+function renderEmprestimos() {
+  const busca = state.buscaEmprestimo.trim().toLowerCase();
+  const filtro = state.filtroEmprestimos;
+
+  let lista = state.emprestimos.filter(e => {
+    const st = statusEmprestimo(e);
+    if (filtro === 'devolvidos' && !e.devolvido) return false;
+    if (filtro !== 'todos' && filtro !== 'devolvidos' && st.chave !== filtro) return false;
+    if (busca) {
+      const alvo = `${e.alunoNome} ${e.alunoTurma} ${e.livroTitulo} ${st.label}`.toLowerCase();
+      if (!alvo.includes(busca)) return false;
+    }
+    return true;
   });
 
-  // 3. REGISTRO DE EMPRÉSTIMO COM PRAZO
-  $('#emprestarBtn')?.addEventListener('click', () => {
-    const alunoId = $('#emprestimoAluno')?.value;
-    const livroId = $('#emprestimoLivro')?.value;
-    const dataRetirada = $('#emprestimoData')?.value || getTodayDateStr();
-    const prazoDias = Number($('#emprestimoPrazo')?.value || 7);
+  const tbody = $('#emprestimosBody');
+  if (!lista.length) {
+    tbody.innerHTML = '';
+    $('#emprestimosEmpty').style.display = 'block';
+    return;
+  }
+  $('#emprestimosEmpty').style.display = 'none';
 
-    if (!alunoId || !livroId || !dataRetirada) {
-      toast('Selecione aluno, livro e data de retirada.', 'warning');
-      return;
+  tbody.innerHTML = lista.map(e => {
+    const st = statusEmprestimo(e);
+    let conservacao = '—';
+    if (e.estadoSaida || e.estadoDevolucao) {
+      const piorou = e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao);
+      conservacao = `${escapeHtml(e.estadoSaida || '?')} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao || '?')}</strong>${piorou ? ' ⚠️' : ''}`;
     }
+    return `<tr>
+      <td>${escapeHtml(e.alunoNome)}<br/><small class="muted">${escapeHtml(e.alunoTurma)}</small></td>
+      <td>${escapeHtml(e.livroTitulo)}</td>
+      <td>${formatarData(e.dataRetirada)}</td>
+      <td>${formatarData(e.dataLimite)}</td>
+      <td>${pillStatus(e)}</td>
+      <td>${e.devolvido ? formatarData(e.dataDevolucao) + `<br/><small>${conservacao}</small>` : '—'}</td>
+      <td class="table-actions">
+        <div class="inline-actions">
+          ${!e.devolvido ? `<button type="button" class="btn-small" data-devolver="${e.id}">📥 Devolver</button>` : ''}
+          <button type="button" class="secondary btn-small" data-historico="${e.id}">🗂️ Histórico</button>
+          ${!e.devolvido ? `<button type="button" class="danger btn-small" data-cancelar-emprestimo="${e.id}">✖</button>` : ''}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
 
-    // Verificar disponibilidade
-    const livroRef = state.livros.find(l => String(l.id) === String(livroId));
-    if (!livroRef) {
-      toast('Livro não encontrado.', 'warning');
-      return;
-    }
+async function registrarEmprestimo() {
+  const alunoId = $('#emprestimoAluno').value;
+  const livroId = $('#emprestimoLivro').value;
+  const dataRetirada = $('#emprestimoData').value || hojeISO();
+  const prazo = parseInt($('#emprestimoPrazo').value, 10) || 7;
+  const estadoSaida = $('#emprestimoEstadoSaida').value;
+  const obsSaida = $('#emprestimoObsSaida').value.trim();
 
-    const disponiveis = getDisponiveisParaLivro(livroRef);
-    if (disponiveis <= 0) {
-      toast(`Não há exemplares disponíveis de "${livroRef.titulo}" para empréstimo.`, 'warning');
-      return;
-    }
+  if (!alunoId) { toast('Selecione o aluno.', 'erro'); return; }
+  if (!livroId) { toast('Selecione o livro.', 'erro'); return; }
 
-    const dataLimite = addDaysToDate(dataRetirada, prazoDias);
+  const limite = new Date(dataRetirada + 'T00:00:00');
+  limite.setDate(limite.getDate() + prazo);
+  const dataLimite = limite.toISOString().split('T')[0];
 
-    state.emprestimos.push({
-      id: uid(),
-      alunoId: String(alunoId),
-      livroId: String(livroId),
-      dataRetirada: String(dataRetirada),
-      dataLimite: String(dataLimite),
-      devolvido: false,
-      dataDevolucao: '',
+  try {
+    await api('/api/emprestimos', {
+      method: 'POST',
+      body: { alunoId: Number(alunoId), livroId: Number(livroId), dataRetirada, dataLimite, estadoSaida, obsSaida: obsSaida || null }
     });
+    toast('Empréstimo registrado com sucesso!');
+    $('#emprestimoObsSaida').value = '';
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-    const alunoRef = state.alunos.find(a => String(a.id) === String(alunoId));
-    addRelatorio(`${alunoRef?.nome || 'Aluno'} realizou empréstimo do livro '${livroRef.titulo}' (Prazo: ${formatDateLocal(dataLimite)}) ${formatarDataHoraExtenso()}.`);
+function abrirDevolucao(id) {
+  const e = state.emprestimos.find(x => x.id === id);
+  if (!e) return;
+  state.devolucaoEmprestimoId = id;
 
-    persistAll();
-    toast(`Empréstimo registrado com prazo até ${formatDateLocal(dataLimite)}!`, 'success');
-    renderAll();
+  $('#devolucaoInfo').textContent = `${e.alunoNome} (${e.alunoTurma}) — "${e.livroTitulo}"`;
+  $('#devolucaoEstadoSaida').textContent = e.estadoSaida || 'Não registrado';
+  $('#devolucaoEstado').value = e.estadoSaida || 'Bom';
+  $('#devolucaoObs').value = '';
+  $('#devolucaoData').value = hojeISO();
+  atualizarComparacaoDevolucao();
+  abrirModal('#modalDevolucao');
+}
+
+function atualizarComparacaoDevolucao() {
+  const e = state.emprestimos.find(x => x.id === state.devolucaoEmprestimoId);
+  if (!e) return;
+  const estadoSel = $('#devolucaoEstado').value;
+  const preview = $('#devolucaoEstadoPreview');
+  preview.textContent = estadoSel;
+  const piorou = e.estadoSaida ? estadoPiorou(e.estadoSaida, estadoSel) : false;
+  preview.classList.toggle('piorou', piorou);
+  $('#avisoDeterioracao').classList.toggle('show', piorou);
+}
+
+async function confirmarDevolucao() {
+  const id = state.devolucaoEmprestimoId;
+  const dataDevolucao = $('#devolucaoData').value || hojeISO();
+  const estadoDevolucao = $('#devolucaoEstado').value;
+  const obsDevolucao = $('#devolucaoObs').value.trim();
+
+  try {
+    await api(`/api/emprestimos/${id}`, {
+      method: 'PUT',
+      body: { dataDevolucao, estadoDevolucao, obsDevolucao: obsDevolucao || null }
+    });
+    fecharModal('#modalDevolucao');
+    toast('Devolução registrada com sucesso! Reputação do aluno atualizada.');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function abrirHistorico(id) {
+  try {
+    const e = await api(`/api/emprestimos/${id}`);
+    const piorou = e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao);
+
+    const linha = (label, valor) => `
+      <div style="display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid #f1f5f9; font-size:13px;">
+        <span class="muted" style="font-weight:900;">${label}</span>
+        <span style="font-weight:800; text-align:right;">${valor}</span>
+      </div>`;
+
+    $('#historicoConteudo').innerHTML = `
+      ${linha('Aluno', `${escapeHtml(e.alunoNome)} (${escapeHtml(e.alunoTurma)})`)}
+      ${linha('Livro', `${escapeHtml(e.livroTitulo)} — ${escapeHtml(e.livroAutor || '')}`)}
+      ${linha('Data de retirada', formatarData(e.dataRetirada))}
+      ${linha('Prazo limite', formatarData(e.dataLimite))}
+      ${linha('Status', e.devolvido ? 'Devolvido' : pillStatus(e))}
+      ${e.devolvido ? linha('Data de devolução', formatarData(e.dataDevolucao)) : ''}
+      <div style="margin-top:14px;">
+        <div style="font-size:12px; font-weight:1000; color:#065f46; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:8px;">📦 Conservação do livro</div>
+        <div class="estado-comparacao" style="margin-bottom:0;">
+          <div class="estado-box">
+            <div class="titulo">Na saída</div>
+            <div class="valor">${escapeHtml(e.estadoSaida || '—')}</div>
+          </div>
+          <div class="estado-seta">➜</div>
+          <div class="estado-box">
+            <div class="titulo">Na devolução</div>
+            <div class="valor ${piorou ? 'piorou' : ''}">${escapeHtml(e.estadoDevolucao || '—')}${piorou ? ' ⚠️' : ''}</div>
+          </div>
+        </div>
+        ${e.obsSaida ? linha('Observação na saída', escapeHtml(e.obsSaida)) : ''}
+        ${e.obsDevolucao ? linha('Observação na devolução', escapeHtml(e.obsDevolucao)) : ''}
+        ${piorou ? '<div class="aviso-deterioracao show" style="margin-top:10px;">⚠️ O livro foi devolvido em estado pior do que na saída. Penalização aplicada na reputação do aluno.</div>' : ''}
+      </div>
+    `;
+    abrirModal('#modalHistorico');
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function cancelarEmprestimo(id) {
+  const e = state.emprestimos.find(x => x.id === id);
+  if (!e) return;
+  if (!confirm(`Cancelar o empréstimo de "${e.livroTitulo}" para ${e.alunoNome}?`)) return;
+  try {
+    await api(`/api/emprestimos/${id}`, { method: 'DELETE' });
+    toast('Empréstimo cancelado.');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+// ============================================================
+// NOTIFICAÇÕES (prazos)
+// ============================================================
+
+function calcularNotificacoes() {
+  const hoje = hojeISO();
+  const tresDias = new Date(); tresDias.setDate(tresDias.getDate() + 3);
+  const limite3 = tresDias.toISOString().split('T')[0];
+
+  const ativos = state.emprestimos.filter(e => !e.devolvido);
+  const vencidos = ativos.filter(e => e.dataLimite && e.dataLimite < hoje);
+  const breve = ativos.filter(e => e.dataLimite && e.dataLimite >= hoje && e.dataLimite <= limite3);
+  return { vencidos, breve, total: vencidos.length + breve.length };
+}
+
+function atualizarBadgeNotificacoes() {
+  const { total } = calcularNotificacoes();
+  const badge = $('#notifBadge');
+  if (total > 0) {
+    badge.textContent = total;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderNotificacoes(filtro = 'todos') {
+  const { vencidos, breve } = calcularNotificacoes();
+  const lista = filtro === 'vencidos' ? vencidos : filtro === 'breve' ? breve : [...vencidos, ...breve];
+
+  $('#notifTotalCount').textContent = vencidos.length + breve.length;
+  $('#notifVencidosCount').textContent = vencidos.length;
+  $('#notifBreveCount').textContent = breve.length;
+
+  const container = $('#notifListContainer');
+  if (!lista.length) {
+    container.innerHTML = '';
+    $('#notifEmpty').style.display = 'block';
+    return;
+  }
+  $('#notifEmpty').style.display = 'none';
+
+  container.innerHTML = lista.map(e => {
+    const vencido = e.dataLimite < hojeISO();
+    return `
+      <div class="notif-card ${vencido ? 'overdue' : 'warning'}">
+        <div class="notif-card-header">
+          <span class="notif-student">${escapeHtml(e.alunoNome)} — ${escapeHtml(e.alunoTurma)}</span>
+          <span class="status-pill ${vencido ? 'badge-overdue' : 'badge-warning'}">${vencido ? '⚠️ Vencido' : '⏳ Vence em breve'}</span>
+        </div>
+        <div class="notif-book">📖 ${escapeHtml(e.livroTitulo)}</div>
+        <div class="notif-meta">
+          <span>Retirada: ${formatarData(e.dataRetirada)}</span>
+          <span>Prazo: ${formatarData(e.dataLimite)}</span>
+        </div>
+        <div class="notif-actions">
+          <button type="button" class="btn-small" data-devolver="${e.id}">📥 Registrar devolução</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+// RELATÓRIOS
+// ============================================================
+
+function periodoRelatorio() {
+  const periodo = $('#relatorioPeriodo').value;
+  const de = $('#relatorioDe').value;
+  const ate = $('#relatorioAte').value;
+  return { periodo, de, ate };
+}
+
+function filtrarEmprestimosPeriodo({ periodo, de, ate }) {
+  const hoje = hojeISO();
+  let deCalc = de, ateCalc = ate;
+  if (periodo === 'hoje') { deCalc = hoje; ateCalc = hoje; }
+  if (periodo === '7d') { const d = new Date(); d.setDate(d.getDate() - 6); deCalc = d.toISOString().split('T')[0]; ateCalc = hoje; }
+  if (periodo === '30d') { const d = new Date(); d.setDate(d.getDate() - 29); deCalc = d.toISOString().split('T')[0]; ateCalc = hoje; }
+  return state.emprestimos.filter(e => {
+    const data = e.dataRetirada;
+    if (periodo === 'mes') return data.slice(0, 7) === hoje.slice(0, 7);
+    if (periodo === 'ano') return data.slice(0, 4) === hoje.slice(0, 4);
+    if (periodo === 'hoje') return data === hoje;
+    if (periodo === '7d' || periodo === '30d') {
+      if (deCalc && data < deCalc) return false;
+      if (ateCalc && data > ateCalc) return false;
+      return true;
+    }
+    if (periodo === 'personalizado') {
+      if (de && data < de) return false;
+      if (ate && data > ate) return false;
+    }
+    return true;
+  });
+}
+
+function gerarRelatorio() {
+  const per = periodoRelatorio();
+  const emprestimos = filtrarEmprestimosPeriodo(per);
+
+  const devolvidos = emprestimos.filter(e => e.devolvido);
+  const ativos = emprestimos.filter(e => !e.devolvido);
+  const atrasadosAtivos = ativos.filter(e => e.dataLimite && e.dataLimite < hojeISO());
+  const atrasadosDevolvidos = devolvidos.filter(e => e.dataLimite && e.dataDevolucao && e.dataDevolucao > e.dataLimite);
+  const noPrazo = devolvidos.filter(e => !e.dataLimite || !e.dataDevolucao || e.dataDevolucao <= e.dataLimite);
+  const deterioracoes = devolvidos.filter(e => e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao));
+
+  const rotuloPeriodo = per.periodo === 'hoje' ? 'Hoje'
+    : per.periodo === '7d' ? 'Últimos 7 dias'
+    : per.periodo === '30d' ? 'Últimos 30 dias'
+    : per.periodo === 'mes' ? 'Mês atual'
+    : per.periodo === 'ano' ? 'Ano atual'
+    : per.periodo === 'personalizado' ? `${per.de || 'início'} a ${per.ate || 'hoje'}`
+    : 'Geral (todo o histórico)';
+
+  // Movimento detalhado: cada empréstimo do período, mais recente primeiro
+  const movimentos = [...emprestimos]
+    .sort((a, b) => (b.dataRetirada || '').localeCompare(a.dataRetirada || ''))
+    .map(e => ({
+      id: e.id,
+      aluno: e.alunoNome,
+      turma: e.alunoTurma,
+      livro: e.livroTitulo,
+      retirada: e.dataRetirada,
+      limite: e.dataLimite,
+      devolvido: !!e.devolvido,
+      devolucao: e.dataDevolucao,
+      estadoSaida: e.estadoSaida || null,
+      estadoDevolucao: e.estadoDevolucao || null,
+      obsSaida: e.obsSaida || null,
+      obsDevolucao: e.obsDevolucao || null,
+      piorou: e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao)
+    }));
+
+  state.relatorioAtual = {
+    geradoEm: new Date().toLocaleString('pt-BR'),
+    periodo: rotuloPeriodo,
+    kpis: {
+      total: emprestimos.length,
+      devolvidos: devolvidos.length,
+      ativos: ativos.length,
+      atrasados: atrasadosAtivos.length + atrasadosDevolvidos.length,
+      noPrazo: noPrazo.length,
+      deterioracoes: deterioracoes.length
+    },
+    movimentos
+  };
+
+  renderRelatorio();
+  toast('Relatório gerado com dados reais do sistema!');
+}
+
+function renderRelatorio() {
+  const r = state.relatorioAtual;
+  if (!r) return;
+
+  const area = $('#reportArea');
+  const kpi = (num, lbl) => `<div class="report-kpi"><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+
+  // Rankings calculados a partir dos movimentos reais do período
+  const porLivro = {};
+  const porAluno = {};
+  const porSala = {};
+  r.movimentos.forEach(m => {
+    porLivro[m.livro] = (porLivro[m.livro] || 0) + 1;
+    porAluno[m.aluno] = (porAluno[m.aluno] || 0) + 1;
+    const sala = m.turma || '—';
+    porSala[sala] = (porSala[sala] || 0) + 1;
+  });
+  const topLivros = Object.entries(porLivro).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topAlunos = Object.entries(porAluno).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topSalas = Object.entries(porSala).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const listaRanking = (titulo, emoji, itens, unidade) => itens.length ? `
+    <div class="report-section">
+      <h4>${emoji} ${titulo}</h4>
+      <ol class="report-list">
+        ${itens.map(([nome, qtd]) => `<li><strong>${escapeHtml(nome)}</strong> — ${qtd} ${unidade}</li>`).join('')}
+      </ol>
+    </div>` : '';
+
+  const celulaConservacao = (m) => {
+    if (!m.estadoSaida && !m.estadoDevolucao) return '<span class="muted">—</span>';
+    const saida = m.estadoSaida ? `<span class="cons-saida">${escapeHtml(m.estadoSaida)}</span>` : '<span class="muted">?</span>';
+    if (!m.devolvido) return `${saida} <span class="muted">→ (em posse)</span>`;
+    if (!m.estadoDevolucao) return `${saida} → <span class="muted">não registrado</span>`;
+    const classe = m.piorou ? 'piorou' : 'ok';
+    const aviso = m.piorou ? ' ⚠️' : '';
+    return `${saida} → <span class="cons-dev ${classe}">${escapeHtml(m.estadoDevolucao)}${aviso}</span>`;
+  };
+
+  const statusMovimento = (m) => {
+    if (!m.devolvido) {
+      if (m.limite && m.limite < hojeISO()) return '<span class="status-pill badge-overdue">⚠️ Em atraso</span>';
+      return '<span class="status-pill badge-ok">Em posse</span>';
+    }
+    if (m.limite && m.devolucao && m.devolucao > m.limite) return '<span class="status-pill badge-returned">Devolvido (atrasado)</span>';
+    return '<span class="status-pill badge-ok">Devolvido no prazo</span>';
+  };
+
+  area.innerHTML = `
+    <h3>📊 Relatório de Empréstimos</h3>
+    <div class="report-meta">
+      <span class="chip">Período: ${escapeHtml(r.periodo)}</span>
+      <span class="chip">Gerado em ${escapeHtml(r.geradoEm)}</span>
+      <span class="chip">${r.movimentos.length} movimento(s)</span>
+    </div>
+
+    <div class="report-section">
+      <h4>Resumo do período</h4>
+      <div class="report-kpis">
+        ${kpi(r.kpis.total, 'Empréstimos')}
+        ${kpi(r.kpis.devolvidos, 'Devolvidos')}
+        ${kpi(r.kpis.ativos, 'Em posse')}
+        ${kpi(r.kpis.atrasados, 'Com atraso')}
+        ${kpi(r.kpis.noPrazo, 'No prazo')}
+        ${kpi(r.kpis.deterioracoes, 'Livros deteriorados')}
+      </div>
+    </div>
+
+    ${listaRanking('Livros mais emprestados', '📈', topLivros, 'empréstimo(s)')}
+    ${listaRanking('Alunos que mais pegaram livros', '👨', topAlunos, 'empréstimo(s)')}
+    ${listaRanking('Salas que mais pegaram livros', '🏫', topSalas, 'empréstimo(s)')}
+
+    <div class="report-section">
+      <h4>Movimento de empréstimos (quem pegou, quando e como estava o livro)</h4>
+      ${r.movimentos.length ? `
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Aluno</th>
+            <th>Turma</th>
+            <th>Livro</th>
+            <th>Pegou em</th>
+            <th>Prazo</th>
+            <th>Devolvido em</th>
+            <th>Estado do livro (saída → devolução)</th>
+            <th>Situação</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${r.movimentos.map(m => `
+          <tr>
+            <td>${escapeHtml(m.aluno)}</td>
+            <td>${escapeHtml(m.turma)}</td>
+            <td>${escapeHtml(m.livro)}</td>
+            <td>${formatarData(m.retirada)}</td>
+            <td>${formatarData(m.limite)}</td>
+            <td>${m.devolvido ? formatarData(m.devolucao) : '—'}</td>
+            <td>${celulaConservacao(m)}${m.obsDevolucao ? `<br/><small class="muted">Obs.: ${escapeHtml(m.obsDevolucao)}</small>` : ''}</td>
+            <td>${statusMovimento(m)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>` : '<div class="empty">Nenhum empréstimo registrado neste período.</div>'}
+    </div>
+  `;
+}
+
+function imprimirRelatorio() {
+  if (!state.relatorioAtual) { toast('Gere um relatório antes de imprimir.', 'aviso'); return; }
+  window.print();
+}
+
+function exportarRelatorioCSV() {
+  const r = state.relatorioAtual;
+  if (!r) { toast('Gere um relatório antes de exportar.', 'aviso'); return; }
+
+  const linhas = [
+    ['Relatório de Empréstimos da Biblioteca'],
+    ['Período', r.periodo],
+    ['Gerado em', r.geradoEm],
+    [],
+    ['Resumo do período'],
+    ['Empréstimos', r.kpis.total],
+    ['Devolvidos', r.kpis.devolvidos],
+    ['Em posse', r.kpis.ativos],
+    ['Com atraso', r.kpis.atrasados],
+    ['Devoluções no prazo', r.kpis.noPrazo],
+    ['Livros deteriorados', r.kpis.deterioracoes],
+    [],
+    ['Movimento de empréstimos'],
+    ['Aluno', 'Turma', 'Livro', 'Pegou em', 'Prazo', 'Devolvido em', 'Estado na saída', 'Estado na devolução', 'Observação devolução', 'Situação'],
+    ...r.movimentos.map(m => [
+      m.aluno, m.turma, m.livro, m.retirada, m.limite || '',
+      m.devolvido ? m.devolucao : '',
+      m.estadoSaida || '', m.estadoDevolucao || '', m.obsDevolucao || '',
+      m.devolvido ? (m.limite && m.devolucao > m.limite ? 'Devolvido (atrasado)' : 'Devolvido no prazo') : 'Em posse'
+    ])
+  ];
+
+  baixarCSV('relatorio-emprestimos.csv', linhas);
+}
+
+// ---------------- Relatórios salvos ----------------
+
+async function salvarRelatorioAtual() {
+  const r = state.relatorioAtual;
+  if (!r) { toast('Gere um relatório antes de salvar.', 'aviso'); return; }
+
+  const conteudo = JSON.stringify({
+    periodo: r.periodo,
+    geradoEm: r.geradoEm,
+    kpis: r.kpis,
+    movimentos: r.movimentos
   });
 
-  // 4. SCANNER DE QR CODE / CÓDIGO DE BARRAS
-  $('#btnAbrirScannerLivro')?.addEventListener('click', () => {
-    iniciarScannerCamera('livro');
-  });
+  try {
+    await api('/api/relatorios', { method: 'POST', body: { mensagem: conteudo } });
+    toast('Relatório salvo com sucesso!');
+    await carregarRelatoriosSalvos();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-  $('#btnAbrirScannerEmprestimo')?.addEventListener('click', () => {
-    iniciarScannerCamera('emprestimo');
-  });
+async function carregarRelatoriosSalvos() {
+  try {
+    const salvos = await api('/api/relatorios');
+    const lista = $('#savedReportsList');
+    const vazio = $('#savedReportsEmpty');
 
-  $('#btnFecharScanner')?.addEventListener('click', pararScannerCamera);
-  $('#btnCancelarScanner')?.addEventListener('click', pararScannerCamera);
-
-  $('#scannerManualBuscarBtn')?.addEventListener('click', () => {
-    const val = $('#scannerManualInput')?.value || '';
-    if (!val.trim()) {
-      toast('Digite um ISBN ou código.', 'warning');
+    if (!salvos.length) {
+      lista.innerHTML = '';
+      vazio.style.display = 'block';
       return;
     }
-    processarCodigoLido(val, currentScannerTarget);
-  });
+    vazio.style.display = 'none';
 
-  $('#scannerManualInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const val = $('#scannerManualInput')?.value || '';
-      if (val.trim()) processarCodigoLido(val, currentScannerTarget);
+    lista.innerHTML = salvos.map(s => {
+      let titulo = 'Relatório';
+      let data = s.criado_em;
+      try {
+        const dados = JSON.parse(s.mensagem);
+        if (dados.periodo) titulo = `Relatório — ${dados.periodo}`;
+        if (dados.geradoEm) data = dados.geradoEm;
+      } catch (e) {
+        titulo = String(s.mensagem).slice(0, 60);
+      }
+      return `
+        <div class="saved-report-item">
+          <div class="sr-info">
+            <div class="sr-title">📄 ${escapeHtml(titulo)}</div>
+            <div class="sr-date">${escapeHtml(String(data))}</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="secondary btn-small" data-ver-relatorio="${s.id}">👁️ Ver</button>
+            <button type="button" class="danger btn-small" data-apagar-relatorio="${s.id}">🗑️</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    console.error('Erro ao carregar relatórios salvos:', err);
+  }
+}
+
+function verRelatorioSalvo(id) {
+  api('/api/relatorios').then(salvos => {
+    const s = salvos.find(x => String(x.id) === String(id));
+    if (!s) { toast('Relatório não encontrado.', 'erro'); return; }
+    try {
+      const dados = JSON.parse(s.mensagem);
+      state.relatorioAtual = {
+        geradoEm: dados.geradoEm || s.criado_em,
+        periodo: dados.periodo || 'Salvo',
+        kpis: dados.kpis || { total: 0, devolvidos: 0, ativos: 0, atrasados: 0, noPrazo: 0, deterioracoes: 0 },
+        movimentos: dados.movimentos || []
+      };
+      renderRelatorio();
+      $('#reportArea').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      toast('Relatório salvo carregado. Use Imprimir ou Exportar CSV se quiser.');
+    } catch (e) {
+      toast('Relatório salvo em formato antigo/inválido.', 'aviso');
     }
-  });
+  }).catch(err => toast(err.message, 'erro'));
+}
 
-  // 5. NOTIFICAÇÕES (SINO, BANNER E TABS)
-  $('#notifBellBtn')?.addEventListener('click', () => {
-    openModal('#modalNotificacoes');
-    renderNotificationsModalList();
-  });
+async function apagarRelatorioSalvo(id) {
+  if (!confirm('Apagar este relatório salvo?')) return;
+  try {
+    await api(`/api/relatorios/${id}`, { method: 'DELETE' });
+    toast('Relatório apagado.');
+    await carregarRelatoriosSalvos();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-  $('#btnVerNotificacoesBanner')?.addEventListener('click', () => {
-    activeNotifFilter = 'vencidos';
-    $$('.notif-tab').forEach(t => t.classList.toggle('active', t.getAttribute('data-filter') === 'vencidos'));
-    openModal('#modalNotificacoes');
-    renderNotificationsModalList();
-  });
+async function apagarRelatoriosSalvos() {
+  if (!confirm('Apagar TODOS os relatórios salvos no sistema?')) return;
+  try {
+    await api('/api/relatorios', { method: 'DELETE' });
+    toast('Todos os relatórios salvos foram apagados.');
+    await carregarRelatoriosSalvos();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
 
-  $$('.notif-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      $$('.notif-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      activeNotifFilter = tab.getAttribute('data-filter') || 'todos';
-      renderNotificationsModalList();
+function renderHistoricoAtividades() {
+  // Histórico real derivado dos empréstimos (registro e devolução)
+  const eventos = [];
+  for (const e of state.emprestimos) {
+    eventos.push({
+      data: e.dataRetirada,
+      tipo: '📤 Empréstimo',
+      aluno: `${e.alunoNome} (${e.alunoTurma})`,
+      livro: e.livroTitulo
     });
+    if (e.devolvido) {
+      const piorou = e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao);
+      eventos.push({
+        data: e.dataDevolucao,
+        tipo: piorou ? '📥 Devolução ⚠️' : '📥 Devolução',
+        aluno: `${e.alunoNome} (${e.alunoTurma})`,
+        livro: e.livroTitulo
+      });
+    }
+  }
+  eventos.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+  const tbody = $('#relatoriosBody');
+  if (!eventos.length) {
+    tbody.innerHTML = '';
+    $('#relatoriosEmpty').style.display = 'block';
+    return;
+  }
+  $('#relatoriosEmpty').style.display = 'none';
+  tbody.innerHTML = eventos.slice(0, 100).map(ev => `
+    <tr>
+      <td>${formatarData(ev.data)}</td>
+      <td>${ev.tipo}</td>
+      <td>${escapeHtml(ev.aluno)}</td>
+      <td>${escapeHtml(ev.livro)}</td>
+    </tr>
+  `).join('');
+}
+
+// ---------------- Backup ----------------
+
+async function baixarBackup() {
+  try {
+    const data = await api('/api/backup');
+    baixarJSON(`biblioteca-backup-${hojeISO()}.json`, data);
+    toast('Backup baixado com sucesso!');
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function importarBackup() {
+  const texto = $('#importarDados').value.trim();
+  if (!texto) { toast('Cole o JSON do backup primeiro.', 'aviso'); return; }
+  let dados;
+  try {
+    dados = JSON.parse(texto);
+  } catch (e) {
+    toast('JSON inválido. Verifique o conteúdo colado.', 'erro');
+    return;
+  }
+  if (!confirm('Importar os dados do backup? Registros duplicados serão ignorados.')) return;
+  try {
+    const r = await api('/api/backup', { method: 'POST', body: dados });
+    toast(`Importação concluída: ${r.inseridos.alunos} aluno(s), ${r.inseridos.livros} livro(s), ${r.inseridos.emprestimos} empréstimo(s).`);
+    $('#importarDados').value = '';
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function abrirModalReset() {
+  // Contagens reais para o modal
+  try {
+    const d = await api('/api/dashboard');
+    $('#resetStatusCounts').textContent = `${d.alunosTotal} aluno(s) • ${d.livrosTitulos} livro(s) • ${d.emprestimosAtivos} empréstimo(s) ativo(s)`;
+  } catch (e) {
+    $('#resetStatusCounts').textContent = '';
+  }
+  abrirModal('#modalConfirmarReset');
+}
+
+async function resetarTudo(comBackup) {
+  if (comBackup) {
+    try {
+      const data = await api('/api/backup');
+      baixarJSON(`biblioteca-backup-${hojeISO()}.json`, data);
+    } catch (err) {
+      if (!confirm('Falha ao gerar o backup. Apagar mesmo assim?')) return;
+    }
+  }
+  try {
+    await api('/api/backup', { method: 'DELETE' });
+    fecharModal('#modalConfirmarReset');
+    toast('Todos os dados foram apagados.');
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+// ============================================================
+// RANKING
+// ============================================================
+
+function periodoRanking() {
+  const periodo = $('#rankingPeriodo').value;
+  const de = $('#rankingDe').value;
+  const ate = $('#rankingAte').value;
+  return { periodo, de, ate };
+}
+
+async function carregarRanking() {
+  const per = periodoRanking();
+  const qs = new URLSearchParams();
+  qs.set('periodo', per.periodo);
+  if (per.periodo === 'personalizado') {
+    if (per.de) qs.set('de', per.de);
+    if (per.ate) qs.set('ate', per.ate);
+  }
+
+  try {
+    const [alunos, salas] = await Promise.all([
+      api(`/api/ranking/alunos?${qs}`),
+      api(`/api/ranking/salas?${qs}`)
+    ]);
+    renderRankingAlunos(alunos);
+    renderRankingSalas(salas);
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+function posBadge(pos) {
+  const classe = pos === 1 ? 'p1' : pos === 2 ? 'p2' : pos === 3 ? 'p3' : '';
+  return `<span class="pos-badge ${classe}">${pos}º</span>`;
+}
+
+function renderRankingAlunos(data) {
+  const leitores = data.leitores || [];
+  const reputacao = data.reputacao || [];
+
+  const linhaAluno = (a) => `
+    <tr>
+      <td>${posBadge(a.posicao)}</td>
+      <td>${escapeHtml(a.nome)}</td>
+      <td><span class="pill">${escapeHtml(a.turma)}</span></td>
+      <td>${a.totalEmprestimos}</td>
+      <td>${a.devolvidos}</td>
+      <td>${a.atrasos > 0 ? `<strong style="color: var(--danger);">${a.atrasos}</strong>` : '0'}</td>
+      <td>${renderEstrelas(a.nota, a.estrelas)}</td>
+    </tr>`;
+
+  $('#rankingLeitoresBody').innerHTML = leitores.map(linhaAluno).join('');
+  $('#rankingLeitoresEmpty').style.display = leitores.length ? 'none' : 'block';
+
+  $('#rankingReputacaoBody').innerHTML = reputacao.map(linhaAluno).join('');
+  $('#rankingReputacaoEmpty').style.display = reputacao.length ? 'none' : 'block';
+}
+
+function renderRankingSalas(data) {
+  const salas = data.salas || [];
+  $('#rankingSalasBody').innerHTML = salas.map(s => `
+    <tr>
+      <td>${posBadge(s.posicao)}</td>
+      <td><strong>${escapeHtml(s.turma)}</strong></td>
+      <td>${s.totalEmprestimos} empréstimo(s)</td>
+      <td>${s.alunosParticipantes} aluno(s)</td>
+      <td>${s.devolvidosNoPrazo}</td>
+    </tr>
+  `).join('');
+  $('#rankingSalasEmpty').style.display = salas.length ? 'none' : 'block';
+}
+
+// ============================================================
+// TEMA / PERSONALIZAÇÃO
+// ============================================================
+
+const LS_TEMA = 'biblioteca_tema_v1';
+
+const PALETAS = [
+  { nome: 'Verde Esmeralda', primary: '#22C55E', dark: '#15803D' },
+  { nome: 'Azul Oceano', primary: '#3B82F6', dark: '#1D4ED8' },
+  { nome: 'Roxo Real', primary: '#8B5CF6', dark: '#6D28D9' },
+  { nome: 'Rosa Vibrante', primary: '#EC4899', dark: '#BE185D' },
+  { nome: 'Laranja Solar', primary: '#F97316', dark: '#C2410C' },
+  { nome: 'Vermelho Rubi', primary: '#EF4444', dark: '#B91C1C' },
+  { nome: 'Ciano Tropical', primary: '#06B6D4', dark: '#0E7490' },
+  { nome: 'Índigo Noturno', primary: '#6366F1', dark: '#4338CA' }
+];
+
+const WALLPAPERS = [
+  { nome: 'Nenhum', css: null },
+  { nome: 'Gradiente Verde', css: 'linear-gradient(135deg, #d1fae5, #a7f3d0, #6ee7b7)' },
+  { nome: 'Gradiente Azul', css: 'linear-gradient(135deg, #dbeafe, #bfdbfe, #93c5fd)' },
+  { nome: 'Gradiente Rosé', css: 'linear-gradient(135deg, #fce7f3, #fbcfe8, #f9a8d4)' },
+  { nome: 'Gradiente Âmbar', css: 'linear-gradient(135deg, #fef3c7, #fde68a, #fcd34d)' },
+  { nome: 'Biblioteca Clássica', css: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 50%, #d97706 100%)' }
+];
+
+function aplicarTema(tema) {
+  const root = document.documentElement;
+  if (tema.primary) {
+    root.style.setProperty('--primary', tema.primary);
+    root.style.setProperty('--primary-dark', tema.dark || tema.primary);
+  }
+  if (tema.bg) root.style.setProperty('--bg', tema.bg);
+  if (tema.card) root.style.setProperty('--card', tema.card);
+
+  if (tema.wallpaper) {
+    document.body.classList.add('has-custom-bg');
+    root.style.setProperty('--custom-bg-img', tema.wallpaper);
+    root.style.setProperty('--custom-overlay', `rgba(248, 250, 252, ${(tema.opacity ?? 85) / 100})`);
+    root.style.setProperty('--custom-blur', `${tema.blur ?? 0}px`);
+  } else {
+    document.body.classList.remove('has-custom-bg');
+    root.style.setProperty('--custom-bg-img', 'none');
+  }
+
+  if (tema.libraryName) {
+    const brand = document.querySelector('.sidebar .brand .title span');
+    if (brand) brand.textContent = tema.libraryName;
+    $('#subtitleText').textContent = tema.libraryName;
+  }
+  if (tema.librarianName) {
+    $('#helloText').textContent = `Olá, ${tema.librarianName} 👋`;
+    document.querySelector('.avatar .name').textContent = tema.librarianName;
+  }
+}
+
+function carregarTema() {
+  try {
+    const raw = localStorage.getItem(LS_TEMA);
+    if (raw) aplicarTema(JSON.parse(raw));
+  } catch (e) {}
+}
+
+function salvarTema() {
+  const tema = {
+    primary: $('#themeColorPrimary').value,
+    dark: escurecerCor($('#themeColorPrimary').value, 30),
+    bg: $('#themeColorBg').value,
+    card: $('#themeColorCard').value,
+    wallpaper: window.__temaWallpaper || null,
+    opacity: parseInt($('#themeBgOpacity').value, 10) || 85,
+    blur: parseInt($('#themeBgBlur').value, 10) || 0,
+    libraryName: $('#themeLibraryName').value.trim(),
+    librarianName: $('#themeLibrarianName').value.trim()
+  };
+  localStorage.setItem(LS_TEMA, JSON.stringify(tema));
+  aplicarTema(tema);
+  fecharModal('#modalPersonalizacao');
+  toast('Personalização salva!');
+}
+
+function escurecerCor(hex, porcento) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - porcento / 100)));
+  const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - porcento / 100)));
+  const b = Math.max(0, Math.round((n & 255) * (1 - porcento / 100)));
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+function renderPaletas() {
+  const container = $('#themePalettesContainer');
+  container.innerHTML = PALETAS.map((p, i) => `
+    <div class="theme-palette-card" data-palette="${i}">
+      <div class="theme-palette-dots">
+        <span class="theme-palette-dot" style="background:${p.primary};"></span>
+        <span class="theme-palette-dot" style="background:${p.dark};"></span>
+      </div>
+      <div class="theme-palette-name">${escapeHtml(p.nome)}</div>
+    </div>
+  `).join('');
+
+  container.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-palette]');
+    if (!card) return;
+    const p = PALETAS[parseInt(card.getAttribute('data-palette'), 10)];
+    $('#themeColorPrimary').value = p.primary;
+    $('#themeColorPrimaryHex').textContent = p.primary;
+    $$('.theme-palette-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+  });
+}
+
+function renderWallpapers() {
+  const container = $('#themeWallpapersContainer');
+  container.innerHTML = WALLPAPERS.map((w, i) => `
+    <div class="theme-wallpaper-card" data-wallpaper="${i}">
+      <div class="theme-wallpaper-thumb" style="${w.css ? `background:${w.css};` : 'background:#f1f5f9;'}"></div>
+      <div class="theme-palette-name">${escapeHtml(w.nome)}</div>
+    </div>
+  `).join('');
+
+  container.addEventListener('click', (e) => {
+    const card = e.target.closest('[data-wallpaper]');
+    if (!card) return;
+    const w = WALLPAPERS[parseInt(card.getAttribute('data-wallpaper'), 10)];
+    window.__temaWallpaper = w.css || null;
+    $('#themeBgControlsContainer').style.display = w.css ? 'block' : 'none';
+    $$('.theme-wallpaper-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+  });
+}
+
+function abrirPersonalizacao() {
+  // Preenche campos com valores atuais
+  const root = document.documentElement;
+  $('#themeColorPrimary').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--primary').trim()) || '#22C55E';
+  $('#themeColorPrimaryHex').textContent = $('#themeColorPrimary').value;
+  $('#themeColorBg').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--bg').trim()) || '#F8FAFC';
+  $('#themeColorBgHex').textContent = $('#themeColorBg').value;
+  $('#themeColorCard').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--card').trim()) || '#FFFFFF';
+  $('#themeColorCardHex').textContent = $('#themeColorCard').value;
+  abrirModal('#modalPersonalizacao');
+}
+
+function rgbParaHex(cor) {
+  if (!cor) return null;
+  if (cor.startsWith('#')) return cor;
+  const m = cor.match(/(\d+),\s*(\d+),\s*(\d+)/);
+  if (!m) return null;
+  const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+function restaurarTemaPadrao() {
+  fecharModal('#modalPersonalizacao');
+  abrirModal('#modalConfirmarResetTema');
+}
+
+function confirmarRestauracaoTema() {
+  localStorage.removeItem(LS_TEMA);
+  window.location.reload();
+}
+
+// ============================================================
+// EVENTOS / INIT
+// ============================================================
+
+function bindEventos() {
+  // ----- Alunos -----
+  $('#alunoForm').addEventListener('submit', cadastrarAluno);
+  $('#alunoBusca').addEventListener('input', (e) => { state.buscaAluno = e.target.value; renderAlunos(); });
+  $('#alunoLimparBusca').addEventListener('click', () => { $('#alunoBusca').value = ''; state.buscaAluno = ''; renderAlunos(); });
+  $('#alunoExportar').addEventListener('click', exportarAlunos);
+  $('#salvarEdicaoAlunoBtn').addEventListener('click', salvarEdicaoAluno);
+  $('#btnAbrirModalDed').addEventListener('click', () => abrirModal('#modalImportarDed'));
+  $('#btnDedProcessar').addEventListener('click', processarDed);
+  $('#btnDedLimpar').addEventListener('click', () => {
+    $('#dedTextoInput').value = '';
+    $('#dedPreviewContainer').style.display = 'none';
+    $('#btnDedConfirmarImportacao').disabled = true;
+  });
+  $('#btnDedConfirmarImportacao').addEventListener('click', confirmarImportacaoDed);
+  $('#dedArquivoInput').addEventListener('change', (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    const reader = new FileReader();
+    reader.onload = () => { $('#dedTextoInput').value = reader.result; };
+    reader.readAsText(arquivo, 'utf-8');
   });
 
-  // 6. FILTROS DA TABELA DE EMPRÉSTIMOS
+  // Ações da tabela de alunos (delegação)
+  $('#alunosBody').addEventListener('click', (e) => {
+    const btnEditar = e.target.closest('[data-editar-aluno]');
+    const btnExcluir = e.target.closest('[data-excluir-aluno]');
+    if (btnEditar) abrirEditarAluno(Number(btnEditar.getAttribute('data-editar-aluno')));
+    if (btnExcluir) excluirAluno(Number(btnExcluir.getAttribute('data-excluir-aluno')));
+  });
+
+  // ----- Livros -----
+  $('#livroForm').addEventListener('submit', cadastrarLivro);
+  $('#livroCapa').addEventListener('input', atualizarPreviewCapa);
+  $('#livroBusca').addEventListener('input', (e) => { state.buscaLivro = e.target.value; renderLivros(); });
+  $('#livroLimparBusca').addEventListener('click', () => { $('#livroBusca').value = ''; state.buscaLivro = ''; renderLivros(); });
+  $('#livroOrdenacao').addEventListener('change', (e) => { state.ordemLivros = e.target.value; renderLivros(); });
+  $('#livroExportar').addEventListener('click', exportarLivros);
+  $('#salvarEdicaoLivroBtn').addEventListener('click', salvarEdicaoLivro);
+  $('#btnAbrirScannerLivro').addEventListener('click', () => abrirScanner('livro'));
+
+  $('#livrosBody').addEventListener('click', (e) => {
+    const btnEtiqueta = e.target.closest('[data-etiqueta-livro]');
+    const btnEditar = e.target.closest('[data-editar-livro]');
+    const btnExcluir = e.target.closest('[data-excluir-livro]');
+    if (btnEtiqueta) abrirEtiqueta(Number(btnEtiqueta.getAttribute('data-etiqueta-livro')));
+    if (btnEditar) abrirEditarLivro(Number(btnEditar.getAttribute('data-editar-livro')));
+    if (btnExcluir) excluirLivro(Number(btnExcluir.getAttribute('data-excluir-livro')));
+  });
+
+  // ----- Estante -----
+  $('#shelfGroupBy').addEventListener('change', (e) => { state.shelf.groupBy = e.target.value; renderEstante(); });
+  $('#shelfSortBy').addEventListener('change', (e) => { state.shelf.sortBy = e.target.value; renderEstante(); });
+  $('#shelfFilterCategory').addEventListener('change', (e) => { state.shelf.categoria = e.target.value; renderEstante(); });
+  $('#shelfFilterStatus').addEventListener('change', (e) => { state.shelf.status = e.target.value; renderEstante(); });
+  $('#shelfSearchInput').addEventListener('input', (e) => { state.shelf.busca = e.target.value; renderEstante(); });
+  $('#btnViewSpines').addEventListener('click', () => {
+    state.shelfView = 'spines';
+    $('#btnViewSpines').classList.add('active');
+    $('#btnViewGrid').classList.remove('active');
+    renderEstante();
+  });
+  $('#btnViewGrid').addEventListener('click', () => {
+    state.shelfView = 'grid';
+    $('#btnViewGrid').classList.add('active');
+    $('#btnViewSpines').classList.remove('active');
+    renderEstante();
+  });
+  $('#shelfContainer').addEventListener('click', (e) => {
+    const card = e.target.closest('[data-detalhes-livro]');
+    if (card) abrirDetalhesLivro(Number(card.getAttribute('data-detalhes-livro')));
+  });
+  $('#detalhesLivroAcoes').addEventListener('click', (e) => {
+    const btnEtiqueta = e.target.closest('[data-etiqueta-livro]');
+    const btnEditar = e.target.closest('[data-editar-livro]');
+    const btnEmprestar = e.target.closest('[data-ir-emprestar]');
+    if (btnEtiqueta) abrirEtiqueta(Number(btnEtiqueta.getAttribute('data-etiqueta-livro')));
+    if (btnEditar) abrirEditarLivro(Number(btnEditar.getAttribute('data-editar-livro')));
+    if (btnEmprestar) irEmprestar(Number(btnEmprestar.getAttribute('data-ir-emprestar')));
+  });
+
+  // ----- Empréstimos -----
+  $('#emprestarBtn').addEventListener('click', registrarEmprestimo);
+  $('#btnAbrirScannerEmprestimo').addEventListener('click', () => abrirScanner('emprestimo'));
+  $('#emprestimoBusca').addEventListener('input', (e) => { state.buscaEmprestimo = e.target.value; renderEmprestimos(); });
+  $('#emprestimoLimparBusca').addEventListener('click', () => { $('#emprestimoBusca').value = ''; state.buscaEmprestimo = ''; renderEmprestimos(); });
+
   $$('.emp-filter').forEach(btn => {
     btn.addEventListener('click', () => {
       $$('.emp-filter').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      activeEmpFilter = btn.getAttribute('data-emp-filter') || 'todos';
-      renderEmprestimosTable();
+      state.filtroEmprestimos = btn.getAttribute('data-emp-filter');
+      renderEmprestimos();
     });
   });
 
-  // 7. CONTROLES DA PRATELEIRA VIRTUAL
-  $('#shelfGroupBy')?.addEventListener('change', (e) => {
-    shelfState.groupBy = e.target.value;
-    persistAll();
-    renderPrateleiraVirtual();
+  $('#emprestimosBody').addEventListener('click', (e) => {
+    const btnDevolver = e.target.closest('[data-devolver]');
+    const btnHistorico = e.target.closest('[data-historico]');
+    const btnCancelar = e.target.closest('[data-cancelar-emprestimo]');
+    if (btnDevolver) abrirDevolucao(Number(btnDevolver.getAttribute('data-devolver')));
+    if (btnHistorico) abrirHistorico(Number(btnHistorico.getAttribute('data-historico')));
+    if (btnCancelar) cancelarEmprestimo(Number(btnCancelar.getAttribute('data-cancelar-emprestimo')));
   });
 
-  $('#shelfSortBy')?.addEventListener('change', (e) => {
-    shelfState.sortBy = e.target.value;
-    persistAll();
-    renderPrateleiraVirtual();
-  });
+  $('#devolucaoEstado').addEventListener('change', atualizarComparacaoDevolucao);
+  $('#confirmarDevolucaoBtn').addEventListener('click', confirmarDevolucao);
 
-  $('#shelfFilterCategory')?.addEventListener('change', (e) => {
-    shelfState.filterCategory = e.target.value;
-    renderPrateleiraVirtual();
-  });
-
-  $('#shelfFilterStatus')?.addEventListener('change', (e) => {
-    shelfState.filterStatus = e.target.value;
-    renderPrateleiraVirtual();
-  });
-
-  $('#shelfSearchInput')?.addEventListener('input', (e) => {
-    shelfState.search = e.target.value;
-    renderPrateleiraVirtual();
-  });
-
-  $('#btnViewSpines')?.addEventListener('click', () => {
-    $('#btnViewSpines')?.classList.add('active');
-    $('#btnViewGrid')?.classList.remove('active');
-    shelfState.viewMode = 'spines';
-    persistAll();
-    renderPrateleiraVirtual();
-  });
-
-  $('#btnViewGrid')?.addEventListener('click', () => {
-    $('#btnViewGrid')?.classList.add('active');
-    $('#btnViewSpines')?.classList.remove('active');
-    shelfState.viewMode = 'grid';
-    persistAll();
-    renderPrateleiraVirtual();
-  });
-
-  // 8. CLIQUE EM LIVROS NA PRATELEIRA
-  $('#shelfContainer')?.addEventListener('click', (ev) => {
-    const bookEl = ev.target?.closest?.('[data-action="ver-livro"]');
-    if (bookEl) {
-      const id = bookEl.getAttribute('data-id');
-      if (id) abrirModalDetalhesLivro(id);
-    }
-  });
-
-  // 9. IMPRESSÃO DE ETIQUETA QR
-  $('#btnImprimirEtiqueta')?.addEventListener('click', imprimirEtiqueta);
-
-  // 10. BOTÃO RESET COM CONFIRMAÇÃO DETALHADA E AVISO DE BACKUP
-  $('#resetBtn')?.addEventListener('click', openResetConfirmationModal);
-  $('#btnResetComBackup')?.addEventListener('click', executarResetComBackup);
-  $('#btnResetSemBackup')?.addEventListener('click', executarResetSemBackup);
-
-  // 11. FECHAMENTO GENÉRICO DE MODAIS
-  $$('[data-close-modal]').forEach(btn => {
+  // ----- Notificações -----
+  $('#notifBellBtn').addEventListener('click', () => { renderNotificacoes('todos'); abrirModal('#modalNotificacoes'); });
+  $('#btnVerNotificacoesBanner').addEventListener('click', () => { renderNotificacoes('vencidos'); abrirModal('#modalNotificacoes'); });
+  $$('.notif-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      const target = btn.getAttribute('data-close-modal');
-      if (target) closeModal(target);
+      $$('.notif-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderNotificacoes(btn.getAttribute('data-filter'));
+    });
+  });
+  // Devolver a partir da notificação
+  $('#notifListContainer').addEventListener('click', (e) => {
+    const btnDevolver = e.target.closest('[data-devolver]');
+    if (btnDevolver) {
+      fecharModal('#modalNotificacoes');
+      abrirDevolucao(Number(btnDevolver.getAttribute('data-devolver')));
+    }
+  });
+
+  // ----- Relatórios -----
+  $('#relatorioPeriodo').addEventListener('change', (e) => {
+    const personalizado = e.target.value === 'personalizado';
+    $('#relatorioDeField').style.display = personalizado ? 'block' : 'none';
+    $('#relatorioAteField').style.display = personalizado ? 'block' : 'none';
+  });
+  $('#gerarRelatorioBtn').addEventListener('click', gerarRelatorio);
+  $('#exportarPdfBtn').addEventListener('click', imprimirRelatorio);
+  $('#exportarCsvBtn').addEventListener('click', exportarRelatorioCSV);
+  $('#limparRelatoriosBtn').addEventListener('click', apagarRelatoriosSalvos);
+  $('#salvarRelatorioBtn').addEventListener('click', salvarRelatorioAtual);
+  $('#recarregarSalvosBtn').addEventListener('click', carregarRelatoriosSalvos);
+  $('#savedReportsList').addEventListener('click', (e) => {
+    const btnVer = e.target.closest('[data-ver-relatorio]');
+    const btnApagar = e.target.closest('[data-apagar-relatorio]');
+    if (btnVer) verRelatorioSalvo(btnVer.getAttribute('data-ver-relatorio'));
+    if (btnApagar) apagarRelatorioSalvo(btnApagar.getAttribute('data-apagar-relatorio'));
+  });
+
+  // ----- Backup -----
+  $('#downloadBackupBtn').addEventListener('click', baixarBackup);
+  $('#importarBtn').addEventListener('click', importarBackup);
+  $('#resetBtn').addEventListener('click', abrirModalReset);
+  $('#btnResetSemBackup').addEventListener('click', () => resetarTudo(false));
+  $('#btnResetComBackup').addEventListener('click', () => resetarTudo(true));
+
+  // ----- Ranking -----
+  $('#rankingPeriodo').addEventListener('change', (e) => {
+    const personalizado = e.target.value === 'personalizado';
+    $('#rankingDeField').style.display = personalizado ? 'block' : 'none';
+    $('#rankingAteField').style.display = personalizado ? 'block' : 'none';
+  });
+  $('#rankingAtualizarBtn').addEventListener('click', carregarRanking);
+  $$('.ranking-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.ranking-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.rankingTab = btn.getAttribute('data-ranking-tab');
+      $('#rankingAlunosContainer').style.display = state.rankingTab === 'alunos' ? 'block' : 'none';
+      $('#rankingSalasContainer').style.display = state.rankingTab === 'salas' ? 'block' : 'none';
     });
   });
 
-  // Fechar modal ao clicar no fundo
-  $$('.modal-backdrop').forEach(backdrop => {
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) {
-        if (backdrop.id === 'modalQrScanner') pararScannerCamera();
-        closeModal(backdrop);
+  // ----- Scanner -----
+  $('#btnFecharScanner').addEventListener('click', fecharScanner);
+  $('#btnCancelarScanner').addEventListener('click', fecharScanner);
+  $('#scannerManualBuscarBtn').addEventListener('click', buscarManualScanner);
+  $('#scannerManualInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); buscarManualScanner(); }
+  });
+
+  // ----- Etiqueta -----
+  $('#btnImprimirEtiqueta').addEventListener('click', () => window.print());
+
+  // ----- Tema -----
+  $('#btnPersonalizarTema').addEventListener('click', abrirPersonalizacao);
+  $('#navPersonalizarTema').addEventListener('click', (e) => { e.preventDefault(); abrirPersonalizacao(); });
+  $('#btnSalvarTema').addEventListener('click', salvarTema);
+  $('#btnRestaurarTemaPadrao').addEventListener('click', restaurarTemaPadrao);
+  $('#btnConfirmarRestauracaoTema').addEventListener('click', confirmarRestauracaoTema);
+  $('#themeColorPrimary').addEventListener('input', (e) => { $('#themeColorPrimaryHex').textContent = e.target.value; });
+  $('#themeColorBg').addEventListener('input', (e) => { $('#themeColorBgHex').textContent = e.target.value; });
+  $('#themeColorCard').addEventListener('input', (e) => { $('#themeColorCardHex').textContent = e.target.value; });
+  $('#themeBgOpacity').addEventListener('input', (e) => { $('#themeBgOpacityVal').textContent = `${e.target.value}%`; });
+  $('#themeBgBlur').addEventListener('input', (e) => { $('#themeBgBlurVal').textContent = `${e.target.value}px`; });
+  $('#themeWallpaperFileInput').addEventListener('change', (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      window.__temaWallpaper = `url(${reader.result})`;
+      $('#themeBgControlsContainer').style.display = 'block';
+      toast('Imagem carregada! Clique em Salvar para aplicar.');
+    };
+    reader.readAsDataURL(arquivo);
+  });
+  $('#btnRemoverFundo').addEventListener('click', () => {
+    window.__temaWallpaper = null;
+    $('#themeBgControlsContainer').style.display = 'none';
+    $$('.theme-wallpaper-card').forEach(c => c.classList.remove('active'));
+  });
+
+  // ----- Logout -----
+  $('#logoutBtn').addEventListener('click', async () => {
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+    localStorage.removeItem('biblioteca_auth_v1');
+    window.location.href = './login.html';
+  });
+
+  // Exibe nome do usuário logado (via sessão real)
+  (async function(){
+    try {
+      const res = await fetch('/api/auth/session', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.user && data.user.username) {
+          const avatar = document.querySelector('.avatar .name');
+          if (avatar) avatar.textContent = data.user.username;
+          const hello = $('#helloText');
+          if (hello) hello.textContent = `Olá, ${data.user.username} 👋`;
+        }
       }
-    });
+    } catch (e) {}
+  })();
+
+  // ----- Sidebar mobile -----
+  $('#sidebarToggle').addEventListener('click', () => {
+    $('#sidebar').classList.toggle('open');
   });
 
-  // 12. TABELAS DE LIVROS E ALUNOS (AÇÕES)
-  $('#livrosBody')?.addEventListener('click', (ev) => {
-    const qrBtn = ev.target?.closest?.('button[data-action="qr"]');
-    if (qrBtn) {
-      abrirModalEtiquetaQr(qrBtn.getAttribute('data-id'));
-      return;
-    }
-    const editBtn = ev.target?.closest?.('button[data-action="editar"]');
-    if (editBtn) {
-      iniciarEdicaoLivro(editBtn.getAttribute('data-id'));
-      return;
-    }
-    const delBtn = ev.target?.closest?.('button[data-action="apagar"]');
-    if (delBtn) {
-      apagarLivro(delBtn.getAttribute('data-id'));
-      return;
+  // ----- Atualização ao trocar de seção -----
+  document.addEventListener('section:change', (e) => {
+    const { section } = e.detail;
+    if (section === 'dashboard') {
+      carregarDashboard().then(renderDashboard);
+    } else if (section === 'ranking') {
+      carregarRanking();
+    } else if (section === 'estante') {
+      renderEstante();
     }
   });
-
-  $('#alunosBody')?.addEventListener('click', (ev) => {
-    const editBtn = ev.target?.closest?.('button[data-action="editar"]');
-    if (editBtn) {
-      iniciarEdicaoAluno(editBtn.getAttribute('data-id'));
-      return;
-    }
-    const delBtn = ev.target?.closest?.('button[data-action="apagar"]');
-    if (delBtn) {
-      apagarAluno(delBtn.getAttribute('data-id'));
-      return;
-    }
-  });
-
-  // 13. TABELA DE EMPRÉSTIMOS (AÇÕES)
-  $('#emprestimosBody')?.addEventListener('click', (ev) => {
-    const devBtn = ev.target?.closest?.('button[data-action="dev"]');
-    if (devBtn) {
-      registrarDevolucao(devBtn.getAttribute('data-id'));
-      return;
-    }
-    const copyBtn = ev.target?.closest?.('button[data-action="notif-copy"]');
-    if (copyBtn) {
-      copiarAvisoWhatsApp(copyBtn.getAttribute('data-id'));
-      return;
-    }
-  });
-
-  // Ações dentro do modal de notificações
-  $('#notifListContainer')?.addEventListener('click', (ev) => {
-    const devBtn = ev.target?.closest?.('button[data-action="notif-dev"]');
-    if (devBtn) {
-      registrarDevolucao(devBtn.getAttribute('data-id'));
-      return;
-    }
-    const copyBtn = ev.target?.closest?.('button[data-action="notif-copy"]');
-    if (copyBtn) {
-      copiarAvisoWhatsApp(copyBtn.getAttribute('data-id'));
-      return;
-    }
-  });
-
-  // 14. DEMAIS CONTROLES (BUSCAS, BACKUP, RELATÓRIOS)
-  $('#logoutBtn')?.addEventListener('click', () => {
-    localStorage.removeItem(LS_AUTH_KEY);
-    location.href = './login.html';
-  });
-
-  $('#livroBusca')?.addEventListener('input', renderLivrosTable);
-  $('#alunoBusca')?.addEventListener('input', renderAlunosTable);
-  $('#emprestimoBusca')?.addEventListener('input', renderEmprestimosTable);
-
-  $('#livroLimparBusca')?.addEventListener('click', () => { const el = $('#livroBusca'); if (el) el.value = ''; renderLivrosTable(); });
-  $('#alunoLimparBusca')?.addEventListener('click', () => { const el = $('#alunoBusca'); if (el) el.value = ''; renderAlunosTable(); });
-  $('#emprestimoLimparBusca')?.addEventListener('click', () => { const el = $('#emprestimoBusca'); if (el) el.value = ''; renderEmprestimosTable(); });
-
-  $('#livrosPopularBtn')?.addEventListener('click', popularLivrosExemplo);
-
-  $('#livroExportar')?.addEventListener('click', () => {
-    downloadJsonFile({ livros: state.livros }, 'livros-export.json');
-  });
-
-  $('#alunoExportar')?.addEventListener('click', () => {
-    downloadJsonFile({ alunos: state.alunos }, 'alunos-export.json');
-  });
-
-  $('#downloadBackupBtn')?.addEventListener('click', () => {
-    downloadJsonFile(getBackup(state), `biblioteca-backup-${new Date().toISOString().split('T')[0]}.json`);
-  });
-
-  $('#importarBtn')?.addEventListener('click', () => {
-    const texto = $('#importarDados')?.value || '';
-    if (!texto.trim()) {
-      toast('Cole um JSON válido para importar.', 'warning');
-      return;
-    }
-    if (!importFromJson(texto)) {
-      toast('JSON inválido. Verifique o conteúdo.', 'warning');
-      return;
-    }
-    persistAll();
-    renderAll();
-    toast('Dados importados com sucesso!', 'success');
-  });
-
-  $('#gerarRelatorioBtn')?.addEventListener('click', () => {
-    gerarRelatorioResumo();
-    toast('Relatório gerado.', 'info');
-  });
-
-  $('#exportarPdfBtn')?.addEventListener('click', exportarRelatorioPDF);
-  $('#limparRelatoriosBtn')?.addEventListener('click', apagarRelatorios);
 }
 
-// ==========================================
-// BOOT
-// ==========================================
-
-function boot() {
-  state.alunos = load(LS_KEYS.alunos, []);
-  state.livros = load(LS_KEYS.livros, []);
-  state.emprestimos = load(LS_KEYS.emprestimos, []);
-  state.relatorios = load(LS_KEYS.relatorios, []);
-
-  state.alunos = Array.isArray(state.alunos) ? state.alunos : [];
-  state.livros = Array.isArray(state.livros) ? state.livros : [];
-  state.emprestimos = Array.isArray(state.emprestimos) ? state.emprestimos : [];
-  state.relatorios = Array.isArray(state.relatorios) ? state.relatorios : [];
-
-  const savedShelf = load(LS_KEYS.prateleira, null);
-  if (savedShelf && typeof savedShelf === 'object') {
-    shelfState = { ...shelfState, ...savedShelf };
-    if ($('#shelfGroupBy')) $('#shelfGroupBy').value = shelfState.groupBy || 'categoria';
-    if ($('#shelfSortBy')) $('#shelfSortBy').value = shelfState.sortBy || 'titulo-asc';
-    if (shelfState.viewMode === 'grid') {
-      $('#btnViewGrid')?.classList.add('active');
-      $('#btnViewSpines')?.classList.remove('active');
-    }
+async function init() {
+  window.__initPasso = 'inicio';
+  try {
+    carregarTema();
+    renderPaletas();
+    renderWallpapers();
+    bindEventos();
+    $('#emprestimoData').value = hojeISO();
+    window.__initPasso = 'setup-ok';
+  } catch (e) {
+    console.error('[init] falha no setup inicial:', e);
+    window.__initPasso = 'setup-erro: ' + e.message;
   }
 
-  // Preencher data padrão de retirada (hoje)
-  const dataInput = $('#emprestimoData');
-  if (dataInput && !dataInput.value) {
-    dataInput.value = getTodayDateStr();
+  await carregarTurmas();
+  window.__initPasso = 'turmas-ok';
+  await recarregarTudo();
+  window.__initPasso = 'recarregar-ok';
+
+  // Dropdowns pesquisáveis de aluno e livro (após os selects estarem populados).
+  // criarCombobox é auto-reparável: se já houver API, retorna a existente.
+  try {
+    const selAlunoEmp = $('#emprestimoAluno');
+    const selLivroEmp = $('#emprestimoLivro');
+    if (selAlunoEmp) criarCombobox(selAlunoEmp, { placeholder: 'Selecione o aluno...' });
+    if (selLivroEmp) criarCombobox(selLivroEmp, { placeholder: 'Selecione o livro...' });
+    window.__initPasso = 'combobox-ok';
+  } catch (e) {
+    console.error('[init] falha ao criar comboboxes:', e);
+    window.__initPasso = 'combobox-erro: ' + e.message;
   }
 
-  wireEvents();
-  renderAll();
+  await carregarRelatoriosSalvos();
 }
 
-boot();
-
-
+init().catch(err => {
+  console.error('Erro na inicialização:', err);
+  toast('Erro ao carregar o sistema. Verifique se o servidor está rodando.', 'erro');
+});

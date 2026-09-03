@@ -67,6 +67,27 @@ try {
     // Coluna já existe
   }
 
+  // ---- Migrations: estado de conservação do livro nos empréstimos ----
+  // Estado/observação registrados na SAÍDA (empréstimo)
+  try {
+    db.exec("ALTER TABLE emprestimos ADD COLUMN estadoSaida TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE emprestimos ADD COLUMN obsSaida TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  // Estado/observação registrados na DEVOLUÇÃO
+  try {
+    db.exec("ALTER TABLE emprestimos ADD COLUMN estadoDevolucao TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE emprestimos ADD COLUMN obsDevolucao TEXT");
+  } catch (e) { /* Coluna já existe */ }
+
+  // ---- Migration: capa do livro (URL da imagem) ----
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN capaUrl TEXT");
+  } catch (e) { /* Coluna já existe */ }
+
   // Criar tabela de relatórios/notificações
   db.exec(`
     CREATE TABLE IF NOT EXISTS relatorios (
@@ -107,9 +128,16 @@ try {
 
   console.log('✅ Inicialização do banco de dados concluída com sucesso!');
 
-  // Exportar uma função para obter uma nova conexão (útil para outras partes da aplicação)
+  // Exportar uma função para obter a conexão compartilhada (singleton).
+  // Antes cada chamada abria uma nova conexão sem fechá-la (vazamento de handles);
+  // agora reutilizamos uma única instância — a API de uso (db().prepare(...)) é mantida.
+  let sharedDb = null;
   module.exports = function() {
-    return new Database(dbPath);
+    if (!sharedDb || !sharedDb.open) {
+      sharedDb = new Database(dbPath);
+      sharedDb.pragma('journal_mode = WAL');
+    }
+    return sharedDb;
   };
 
 } catch (error) {

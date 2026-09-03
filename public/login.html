@@ -104,8 +104,10 @@
       font-size:13px;
       color:var(--muted);
       min-height:18px;
+      transition: color 160ms ease;
     }
     .msg.error{color:var(--danger);}
+    .msg.success{color:var(--primary-dark);}
 
     .hint{
       margin-top:12px;
@@ -130,8 +132,8 @@
       <form id="loginForm">
         <div class="row">
           <div>
-            <label for="username">Usuário</label>
-            <input id="username" autocomplete="username" placeholder="Ex.: administrador" required />
+            <label for="username">Usuário ou e-mail</label>
+            <input id="username" autocomplete="username" placeholder="Ex.: admin ou admin@biblioteca.com" required />
           </div>
           <div>
             <label for="password">Senha</label>
@@ -145,7 +147,7 @@
 
         <div class="hint">
           <b>Credenciais padrão:</b><br/>
-          Usuário: <b>admin</b>
+          Usuário: <b>admin</b> &nbsp;|&nbsp; Senha: <b>1234</b>
         </div>
       </form>
 
@@ -157,10 +159,13 @@
 
     const $ = (sel) => document.querySelector(sel);
 
-    function setAuth(){
-      // token simples apenas para bloquear o front-end
-      // (sem servidor: não é 100% seguro contra quem inspeciona, mas evita acesso acidental)
-      localStorage.setItem(LS_AUTH_KEY, JSON.stringify({ ok: true, at: Date.now() }));
+    function setAuth(userData){
+      const authObj = {
+        ok: true,
+        at: Date.now(),
+        user: userData || { username: 'admin' }
+      };
+      localStorage.setItem(LS_AUTH_KEY, JSON.stringify(authObj));
     }
 
     function isAuth(){
@@ -175,7 +180,15 @@
     function toastError(msg){
       const el = $('#loginMsg');
       el.textContent = msg;
+      el.classList.remove('success');
       el.classList.add('error');
+    }
+
+    function toastSuccess(msg){
+      const el = $('#loginMsg');
+      el.textContent = msg;
+      el.classList.remove('error');
+      el.classList.add('success');
     }
 
     // Redireciona se já estiver autenticado
@@ -183,26 +196,83 @@
       location.href = './index.html';
     }
 
-    async function loginUser(username, password) {
+    async function tryAuthRequest(url, username, password) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       try {
-        const response = await fetch('/api/auth/login', {
+        const res = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ username, password }),
+          signal: controller.signal,
+          credentials: 'include'
         });
+        clearTimeout(timeoutId);
+        return res;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        return null;
+      }
+    }
 
-        const data = await response.json();
-        if (response.ok && data.ok) {
-          setAuth();
-          location.href = './index.html';
-          return;
+    async function loginUser(username, password) {
+      const btn = $('#loginBtn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = 'Entrando...';
+      $('#loginMsg').textContent = '';
+      $('#loginMsg').className = 'msg';
+
+      try {
+        let response = null;
+
+        // 1. Tenta endpoint relativo (quando servido via Express / HTTP)
+        if (location.protocol !== 'file:') {
+          response = await tryAuthRequest('/api/auth/login', username, password);
         }
 
-        toastError(data.error || 'Usuário ou senha inválidos.');
+        // 2. Se falhou ou a resposta não veio do Express (ex: Live Server na porta 3000, 5500 ou 8080)
+        if (!response || response.status === 404 || response.status === 426) {
+          const possiblePorts = [3000, 3001, 8080, 5000];
+          for (const port of possiblePorts) {
+            if (location.port !== String(port)) {
+              response = await tryAuthRequest(`http://localhost:${port}/api/auth/login`, username, password);
+              if (response && response.status !== 404 && response.status !== 426) break;
+            }
+          }
+        }
+
+        if (response) {
+          let data = null;
+          try {
+            data = await response.json();
+          } catch(err) {
+            data = null;
+          }
+
+          if (response.ok && data && data.ok) {
+            toastSuccess('Login realizado com sucesso! Redirecionando...');
+            setAuth(data.user);
+            location.href = './index.html?_=' + Date.now(); // evita HTML/JS em cache
+            return;
+          } else if (response.status === 400 || response.status === 401 || (data && data.error)) {
+            toastError(data?.error || 'Usuário ou senha inválidos.');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            return;
+          }
+        }
+
+        // 3. Sem fallback local inseguro — se o backend está inacessível, tenta um último endpoint alternativo antes de falhar.
+        // (portas alternativas já foram tentadas acima)
+        toastError('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.');
       } catch (err) {
-        toastError('Erro ao conectar com o servidor. Tente novamente.');
+        toastError('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     }
 
@@ -214,6 +284,12 @@
       if (!u || !p) {
         toastError('Preencha usuário e senha.');
         return;
+      }
+
+      // Se o usuário digitar um e-mail, aceitamos como login (mesma credencial cadastrada).
+      if (u.includes('@')) {
+        const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u);
+        if (!emailOk) { toastError('E-mail inválido. Verifique e tente novamente.'); return; }
       }
 
       loginUser(u, p);

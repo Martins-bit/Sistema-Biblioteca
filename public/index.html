@@ -20,6 +20,10 @@
       --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
       --shadow: 0 10px 30px rgba(16, 24, 40, 0.10);
       --radius: 16px;
+
+      --custom-bg-img: none;
+      --custom-overlay: rgba(248, 250, 252, 0);
+      --custom-blur: 0px;
     }
 
     * { box-sizing: border-box; }
@@ -53,13 +57,15 @@
       left: 0;
       width: 280px;
       height: 100vh;
-      background: #ffffff;
+      background: var(--card);
       border-right: 1px solid var(--border);
       padding: 18px 14px;
       display: flex;
       flex-direction: column;
       gap: 14px;
       z-index: 50;
+      transition: background 200ms ease, border-color 200ms ease;
+      overflow-y: auto;
     }
 
     .sidebar .brand {
@@ -197,29 +203,6 @@
       justify-content: flex-end;
       flex: 1;
     }
-
-    .search {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      min-width: 360px;
-      box-shadow: var(--shadow-sm);
-    }
-
-    .search input {
-      border: 0;
-      outline: none;
-      width: 100%;
-      background: transparent;
-      font-weight: 700;
-      color: var(--text);
-    }
-
-    .search input::placeholder { color: var(--muted); font-weight: 650; }
 
     .icon-btn {
       width: 42px;
@@ -374,7 +357,6 @@
     }
 
     /* Inputs */
-    /* IMPORTANT: do not remove existing inputs; only style them */
     input, select {
       width: 100%;
       height: 46px;
@@ -429,6 +411,9 @@
     @media (min-width: 860px) {
       .row.two {
         grid-template-columns: 1fr 1fr;
+      }
+      .row.three {
+        grid-template-columns: 1fr 1fr 1fr;
       }
     }
 
@@ -532,6 +517,17 @@
       background: rgba(34, 197, 94, 0.06);
     }
 
+    .table-category-header td {
+      background: #f1f5f9 !important;
+      font-weight: 1000 !important;
+      color: #15803d !important;
+      font-size: 13px !important;
+      padding: 10px 18px !important;
+      border-top: 2px solid #e2e8f0;
+      border-bottom: 2px solid #e2e8f0;
+      letter-spacing: 0.01em;
+    }
+
     .table-actions {
       text-align: right;
     }
@@ -560,7 +556,6 @@
       margin-top: 12px;
     }
 
-    /* Make existing “span-2” keep working visually */
     .span-2 { grid-column: 1 / -1; }
 
     /* Fade in */
@@ -586,7 +581,6 @@
       }
 
       .topbar .left { min-width: auto; }
-      .search { display: none; }
     }
 
     /* Ensure sections use our spacing */
@@ -597,21 +591,9 @@
     /* Helpers */
     .muted { color: var(--muted); }
 
-    /* Section switching (nav) */
-    [data-section="livros"], [data-section="alunos"], [data-section="emprestimos"], [data-section="relatorios"], [data-section="ranking"], [data-section="dashboard"], [data-section="prateleira"] {
-      display: none;
-    }
-    [data-section="dashboard"].active {
-      display: grid;
-    }
-    [data-section="livros"].active,
-    [data-section="alunos"].active,
-    [data-section="emprestimos"].active,
-    [data-section="relatorios"].active,
-    [data-section="ranking"].active,
-    [data-section="prateleira"].active {
-      display: block;
-    }
+    /* Section switching (nav): apenas a seção ativa fica visível */
+    [data-section] { display: none; }
+    [data-section].active { display: block; }
 
     /* Modals */
     .modal-backdrop {
@@ -628,7 +610,8 @@
       transition: opacity 220ms ease;
     }
 
-    .modal-backdrop.show {
+    .modal-backdrop.show,
+    .modal-backdrop.active {
       display: flex;
       opacity: 1;
     }
@@ -895,73 +878,150 @@
       font-weight: 700;
     }
 
-    /* Virtual Bookshelf Styles */
-    .shelf-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 14px;
-      background: #ffffff;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      margin-bottom: 18px;
+    /* ===== Estrelas (reputação) ===== */
+    .stars {
+      color: #f59e0b;
+      font-size: 15px;
+      letter-spacing: 2px;
+      white-space: nowrap;
     }
-
-    .shelf-filters {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 10px;
-      flex: 1;
-    }
-
-    .shelf-view-toggle {
-      display: flex;
-      background: #f1f5f9;
-      border-radius: 10px;
-      padding: 3px;
-      border: 1px solid var(--border);
-    }
-
-    .shelf-view-btn {
-      height: 34px;
-      padding: 0 12px;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--muted);
+    .stars.small { font-size: 13px; letter-spacing: 1px; }
+    .stars-note {
       font-size: 12px;
-      font-weight: 800;
-      border: 0;
-      cursor: pointer;
-      box-shadow: none;
+      font-weight: 900;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+    .stars-note.good { color: #15803d; }
+    .stars-note.mid { color: #b45309; }
+    .stars-note.bad { color: #b91c1c; }
+
+    /* ===== Capas de livros ===== */
+    .cover-thumb {
+      width: 44px;
+      height: 60px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: linear-gradient(135deg, #e2e8f0, #f1f5f9);
+      border: 1px solid var(--border);
+      display: block;
+    }
+    .cover-placeholder {
+      width: 44px;
+      height: 60px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #fff;
+      border: 1px solid rgba(0,0,0,0.08);
     }
 
-    .shelf-view-btn.active {
+    /* ===== Estante (cards com capa) ===== */
+    .estante-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 16px;
+    }
+    .estante-card {
       background: #ffffff;
-      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
       box-shadow: var(--shadow-sm);
-    }
-
-    .shelf-view-btn:hover {
-      transform: none;
-      box-shadow: none;
-    }
-
-    /* Shelf Rack Section */
-    .shelf-rack {
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      cursor: pointer;
+    }
+    .estante-card:hover {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow);
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+    .estante-cover {
+      height: 190px;
+      background: linear-gradient(135deg, #e2e8f0, #f8fafc);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .estante-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .estante-cover .placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: #64748b;
+      font-weight: 900;
+      font-size: 12px;
+      text-align: center;
+      padding: 12px;
+    }
+    .estante-cover .placeholder .emoji { font-size: 40px; }
+    .estante-body {
+      padding: 12px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+    }
+    .estante-title {
+      font-weight: 1000;
+      font-size: 14px;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .estante-author {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 750;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .estante-footer {
+      margin-top: auto;
+      padding-top: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .estante-categoria {
+      font-size: 10px;
+      font-weight: 900;
+      color: #065f46;
+      background: rgba(34, 197, 94, 0.10);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      padding: 3px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60%;
     }
 
+    /* ===== Estante de madeira (lombadas 3D) ===== */
     .wood-shelf-section {
       background: #ffffff;
       border: 1px solid var(--border);
       border-radius: 18px;
       overflow: hidden;
       box-shadow: var(--shadow-sm);
+      margin-bottom: 20px;
     }
 
     .wood-shelf-header {
@@ -992,7 +1052,6 @@
       border-radius: 999px;
     }
 
-    /* Shelf row container */
     .wood-shelf-stage {
       padding: 24px 20px 0;
       background: radial-gradient(circle at 50% 0%, #ffffff 0%, #f1f5f9 100%);
@@ -1012,7 +1071,7 @@
       min-width: max-content;
     }
 
-    /* 3D Realistic Book Spine */
+    /* Lombada 3D do livro em pé */
     .spine-book {
       position: relative;
       width: 44px;
@@ -1029,6 +1088,7 @@
       transition: transform 200ms cubic-bezier(0.2, 0, 0, 1), box-shadow 200ms ease;
       transform-origin: bottom center;
       user-select: none;
+      flex-shrink: 0;
     }
 
     .spine-book::before {
@@ -1079,202 +1139,341 @@
       box-shadow: 0 0 0 2px rgba(255,255,255,0.7), 0 0 6px #ef4444;
     }
 
-    /* Wooden Plank Base */
+    /* Prateleira de madeira (base) — textura de madeira mais rica */
     .wood-plank {
-      height: 18px;
-      background: linear-gradient(180deg, #d97706 0%, #b45309 40%, #78350f 100%);
-      border-radius: 2px 2px 6px 6px;
-      box-shadow: 0 8px 18px rgba(120, 53, 15, 0.35), inset 0 2px 3px rgba(251, 191, 36, 0.5);
+      height: 22px;
+      background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 2px, transparent 2px 26px),
+        linear-gradient(180deg, #e29a3d 0%, #c97716 25%, #a35a0e 55%, #7c3f08 100%);
+      border-radius: 3px 3px 8px 8px;
+      box-shadow:
+        0 10px 22px rgba(120, 53, 15, 0.4),
+        inset 0 2px 3px rgba(253, 230, 138, 0.65),
+        inset 0 -3px 5px rgba(60, 30, 0, 0.45);
       position: relative;
     }
 
     .wood-plank::after {
       content: '';
       position: absolute;
-      top: 18px;
+      top: 22px;
       left: 10px;
       right: 10px;
-      height: 6px;
-      background: rgba(120, 53, 15, 0.2);
-      filter: blur(4px);
+      height: 7px;
+      background: rgba(120, 53, 15, 0.22);
+      filter: blur(5px);
     }
 
-    /* Grid View of Bookshelf */
-    .shelf-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-      gap: 16px;
-    }
-
-    .book-card {
-      background: #ffffff;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: var(--shadow-sm);
-      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
-      display: flex;
-      flex-direction: column;
-      cursor: pointer;
-    }
-
-    .book-card:hover {
-      transform: translateY(-3px);
-      box-shadow: var(--shadow);
-      border-color: rgba(34, 197, 94, 0.35);
-    }
-
-    .book-card-cover {
-      height: 130px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      color: #ffffff;
+    /* Suportes laterais da prateleira */
+    .wood-shelf-stage {
       position: relative;
     }
-
-    .book-card-cover::after {
+    .wood-shelf-stage::before,
+    .wood-shelf-stage::after {
       content: '';
       position: absolute;
-      inset: 0;
-      background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(0,0,0,0.35));
-      pointer-events: none;
-    }
-
-    .book-card-cover-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      bottom: 0;
+      width: 14px;
+      height: 100%;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 30px),
+        linear-gradient(90deg, #b45309, #92400e 60%, #78350f);
+      border-radius: 4px;
+      box-shadow: inset 0 0 6px rgba(0,0,0,0.25);
       z-index: 2;
     }
+    .wood-shelf-stage::before { left: 0; }
+    .wood-shelf-stage::after { right: 0; }
 
-    .book-card-icon { font-size: 22px; }
-
-    .book-card-cover-title {
-      font-weight: 1000;
-      font-size: 15px;
-      line-height: 1.25;
-      z-index: 2;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.5);
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+    /* Divisórias (suportes verticais) entre grupos de livros */
+    .spine-divider {
+      width: 12px;
+      height: 185px;
+      align-self: flex-end;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.05) 0 2px, transparent 2px 30px),
+        linear-gradient(90deg, #c97716, #a35a0e 60%, #8a4a0b);
+      border-radius: 3px 3px 0 0;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.22), 2px 0 4px rgba(0,0,0,0.15);
+      flex-shrink: 0;
     }
 
-    .book-card-body {
-      padding: 14px;
+    /* Toggle de visualização da estante */
+    .shelf-view-toggle {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      flex: 1;
+      background: #f1f5f9;
+      border-radius: 10px;
+      padding: 3px;
+      border: 1px solid var(--border);
     }
 
-    .book-card-author {
-      font-size: 13px;
+    .shelf-view-btn {
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 8px;
+      background: transparent;
       color: var(--muted);
-      font-weight: 750;
-    }
-
-    .book-card-footer {
-      margin-top: auto;
-      padding-top: 10px;
-      border-top: 1px solid #f1f5f9;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
       font-size: 12px;
       font-weight: 800;
+      border: 0;
+      cursor: pointer;
+      box-shadow: none;
     }
 
-    /* QR Scanner UI */
-    .qr-scanner-box {
-      width: 100%;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #0f172a;
-      position: relative;
-      min-height: 280px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #qrVideoElem {
-      width: 100%;
-      max-height: 320px;
-      object-fit: cover;
-    }
-
-    .scanner-reticle {
-      position: absolute;
-      width: 220px;
-      height: 220px;
-      border: 2px dashed rgba(34, 197, 94, 0.85);
-      border-radius: 16px;
-      pointer-events: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .scanner-laser {
-      width: 100%;
-      height: 2px;
-      background: #22c55e;
-      box-shadow: 0 0 10px #22c55e, 0 0 20px #22c55e;
-      animation: scanLaser 2s infinite alternate ease-in-out;
-    }
-
-    @keyframes scanLaser {
-      0% { transform: translateY(-95px); opacity: 0.3; }
-      100% { transform: translateY(95px); opacity: 1; }
-    }
-
-    /* Book Label & QR Print Card */
-    .qr-label-card {
+    .shelf-view-btn.active {
       background: #ffffff;
-      border: 2px dashed var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      display: flex;
-      gap: 20px;
-      align-items: center;
-      max-width: 440px;
-      margin: 0 auto;
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
     }
 
-    .qr-code-img {
-      width: 128px;
-      height: 128px;
-      flex-shrink: 0;
-      border-radius: 10px;
+    .shelf-view-btn:hover {
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* ===== Conservação (empréstimo) ===== */
+    .estado-comparacao {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 10px;
+      align-items: center;
+      background: var(--bg);
       border: 1px solid var(--border);
-      padding: 4px;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .estado-box {
+      text-align: center;
+    }
+    .estado-box .titulo {
+      font-size: 11px;
+      font-weight: 900;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 4px;
+    }
+    .estado-box .valor {
+      font-size: 15px;
+      font-weight: 1000;
+      color: var(--text);
+    }
+    .estado-box .valor.piorou { color: var(--danger); }
+    .estado-seta { font-size: 20px; color: var(--muted); }
+    .aviso-deterioracao {
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 14px;
+      display: none;
+    }
+    .aviso-deterioracao.show { display: block; }
+
+    /* ===== Relatórios ===== */
+    .report-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+    .report-toolbar .field { min-width: 150px; }
+    .report-area {
+      background: linear-gradient(180deg, #ffffff, #fbfdfc);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      min-height: 120px;
+      box-shadow: var(--shadow-sm);
+    }
+    .report-area h3 {
+      margin: 0 0 4px;
+      font-size: 19px;
+      font-weight: 1000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .report-area h3::after {
+      content: '';
+      flex: 1;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(34, 197, 94, 0.35), transparent);
+      border-radius: 2px;
+    }
+    .report-area .report-meta {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+      margin-bottom: 18px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .report-area .report-meta .chip {
+      background: rgba(34, 197, 94, 0.10);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+      color: #065f46;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .report-section { margin-top: 22px; }
+    .report-section h4 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 1000;
+      color: #065f46;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .report-section h4::before {
+      content: '';
+      width: 4px;
+      height: 16px;
+      border-radius: 2px;
+      background: var(--primary);
+    }
+    /* Tabela de movimentos do relatório */
+    .report-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      font-size: 12.5px;
+    }
+    .report-table th {
+      background: rgba(34, 197, 94, 0.10);
+      color: #065f46;
+      font-weight: 1000;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(34, 197, 94, 0.18);
+    }
+    .report-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #f1f5f9;
+      font-weight: 700;
+      vertical-align: top;
       background: #fff;
     }
-
-    @media print {
-      body * { visibility: hidden; }
-      #printableLabel, #printableLabel * { visibility: visible; }
-      #printableLabel {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        width: 320px;
-        border: 1px solid #000;
-        padding: 14px;
-        background: #fff;
-        display: flex !important;
-      }
+    .report-table tr:last-child td { border-bottom: 0; }
+    .report-table tr:hover td { background: rgba(34, 197, 94, 0.04); }
+    .report-table .cons-saida { color: var(--muted); }
+    .report-table .cons-dev { font-weight: 1000; }
+    .report-table .cons-dev.piorou { color: var(--danger); }
+    .report-table .cons-dev.ok { color: #15803d; }
+    /* Lista de relatórios salvos */
+    .saved-reports {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
     }
+    .saved-report-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .saved-report-item:hover {
+      border-color: rgba(34, 197, 94, 0.35);
+      box-shadow: var(--shadow-sm);
+    }
+    .saved-report-item .sr-info { flex: 1; min-width: 0; }
+    .saved-report-item .sr-title {
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .saved-report-item .sr-date {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 800;
+      margin-top: 2px;
+    }
+    .report-kpis {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+    .report-kpi {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .report-kpi .num { font-size: 22px; font-weight: 1000; }
+    .report-kpi .lbl { font-size: 11px; color: var(--muted); font-weight: 800; margin-top: 2px; }
+    .report-list { margin: 0; padding-left: 18px; font-size: 13px; font-weight: 700; }
+    .report-list li { margin-bottom: 4px; }
 
+    /* ===== Ranking ===== */
+    .ranking-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .ranking-tab {
+      height: 40px;
+      padding: 0 16px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #f1f5f9;
+      color: var(--muted);
+      font-weight: 900;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .ranking-tab.active {
+      background: rgba(34, 197, 94, 0.12);
+      border-color: rgba(34, 197, 94, 0.4);
+      color: #065f46;
+    }
+    .pos-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      font-weight: 1000;
+      font-size: 13px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .pos-badge.p1 { background: #fef9c3; border-color: #fde047; color: #854d0e; }
+    .pos-badge.p2 { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
+    .pos-badge.p3 { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
 
     /* Toast */
     #toast {
-
       position: fixed;
       bottom: 16px;
       left: 50%;
@@ -1291,7 +1490,6 @@
       font-weight: 900;
     }
 
-    /* Badge if used later */
     .badge { display: inline-block; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12px; font-weight: 1000; }
 
     .pill {
@@ -1305,7 +1503,6 @@
       background: rgba(255,255,255,0.8);
     }
 
-    /* Keep legacy markup present but restyled */
     .actions {
       display: flex;
       gap: 10px;
@@ -1313,7 +1510,6 @@
       margin-top: 8px;
     }
 
-    /* Secondary button class existing */
     button.secondary {
       background: #fff;
       border: 1px solid var(--border);
@@ -1326,10 +1522,8 @@
       border-color: rgba(34, 197, 94, 0.35);
     }
 
-    /* Date input height consistency */
     input[type="date"] { padding: 0 12px; }
 
-    /* Reduce motion */
     @media (prefers-reduced-motion: reduce) {
       * { transition: none !important; animation: none !important; }
     }
@@ -1348,8 +1542,173 @@
     }
     .hamburger svg { opacity: 0.9; }
 
+    /* Custom Themes and Background Personalization */
+    body.has-custom-bg {
+      background-image: var(--custom-bg-img);
+      background-size: cover;
+      background-position: center;
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+    }
+
+    body.has-custom-bg .app {
+      background: var(--custom-overlay, rgba(248, 250, 252, 0.84));
+      backdrop-filter: blur(var(--custom-blur, 0px));
+      min-height: 100vh;
+    }
+
+    body.has-custom-bg .sidebar {
+      background: var(--card);
+      backdrop-filter: blur(14px);
+    }
+
+    body.has-custom-bg .card {
+      background: var(--card);
+      backdrop-filter: blur(10px);
+    }
+
+    .theme-palettes-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 10px;
+    }
+    .theme-palette-card {
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 8px;
+      cursor: pointer;
+      background: var(--card);
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .theme-palette-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    }
+    .theme-palette-card.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+    }
+    .theme-palette-dots {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+    }
+    .theme-palette-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+    .theme-palette-name {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .theme-wallpapers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .theme-wallpaper-card {
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 8px;
+      cursor: pointer;
+      background: var(--card);
+      transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+    .theme-wallpaper-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--primary);
+    }
+    .theme-wallpaper-card.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.25);
+    }
+    .theme-wallpaper-thumb {
+      width: 100%;
+      height: 48px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background-size: cover;
+      background-position: center;
+    }
+
     @media (max-width: 980px) {
       .hamburger { display: grid; }
+    }
+
+    /* ===== Combobox pesquisável (dropdowns de aluno/livro) ===== */
+    .cb-wrap { position: relative; width: 100%; }
+    .cb-box {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; width: 100%; min-height: 46px;
+      border: 1px solid var(--border); border-radius: 12px;
+      background: #fff; color: var(--text); padding: 0 12px;
+      cursor: pointer; font-weight: 750; font-size: 14px;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .cb-box:hover { border-color: rgba(34, 197, 94, 0.45); }
+    .cb-box:focus, .cb-wrap.open .cb-box {
+      border-color: rgba(34, 197, 94, 0.70);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.18);
+    }
+    .cb-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cb-label.cb-placeholder { color: var(--muted); font-weight: 650; }
+    .cb-arrow { color: var(--muted); font-size: 12px; transition: transform 160ms; }
+    .cb-wrap.open .cb-arrow { transform: rotate(180deg); }
+    .cb-panel {
+      display: none; position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: #fff; border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18); z-index: 1000;
+      overflow: hidden; max-width: 100%;
+    }
+    .cb-search {
+      width: 100%; height: 40px; border: 0 !important; border-bottom: 1px solid var(--border) !important;
+      border-radius: 0 !important; box-shadow: none !important; padding: 0 12px;
+      font-size: 13px; font-weight: 700;
+    }
+    .cb-search:focus { outline: none; border-color: var(--border) !important; box-shadow: none !important; }
+    .cb-list { max-height: 240px; overflow-y: auto; padding: 6px; }
+    .cb-item {
+      padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 700;
+      cursor: pointer; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .cb-item:hover { background: rgba(34, 197, 94, 0.08); }
+    .cb-item.selected { background: rgba(34, 197, 94, 0.14); color: #065f46; font-weight: 900; }
+    .cb-item.disabled { opacity: 0.45; cursor: not-allowed; text-decoration: line-through; }
+    .cb-item.disabled:hover { background: transparent; }
+    .cb-empty { padding: 14px 12px; text-align: center; font-size: 12px; color: var(--muted); font-weight: 800; }
+
+    /* Impressão de relatórios */
+    @media print {
+      body * { visibility: hidden; }
+      #reportArea, #reportArea * { visibility: visible; }
+      #reportArea {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 20px;
+        border: 0;
+        box-shadow: none;
+      }
     }
   </style>
 </head>
@@ -1365,17 +1724,24 @@
       <div class="section-title">━━━━━━━━━━━━━━━━</div>
       <nav>
         <a class="nav-item active" href="#" data-nav="dashboard">🏠 Dashboard</a>
-        <a class="nav-item" href="#" data-nav="prateleira">📚 Prateleira Virtual</a>
-        <a class="nav-item" href="#" data-nav="livros">📖 Livros</a>
         <a class="nav-item" href="#" data-nav="alunos">👨 Alunos</a>
+        <a class="nav-item" href="#" data-nav="livros">📖 Livros</a>
+        <a class="nav-item" href="#" data-nav="estante">📚 Estante</a>
         <a class="nav-item" href="#" data-nav="emprestimos">🔄 Empréstimos</a>
         <a class="nav-item" href="#" data-nav="relatorios">📊 Relatórios</a>
         <a class="nav-item" href="#" data-nav="ranking">🏆 Ranking</a>
+        <a class="nav-item" href="#" id="navPersonalizarTema" style="color: var(--primary-dark); font-weight: 900;">🎨 Personalizar Cores & Fundo</a>
       </nav>
 
       <div class="divider"></div>
 
       <div class="section-title">🟢 Sistema Online</div>
+
+      <div style="margin-top: auto; padding-top: 10px;">
+        <button type="button" id="logoutBtn" class="secondary btn-small" style="width: 100%; justify-content: center; gap: 6px;">
+          🚪 Sair da Conta
+        </button>
+      </div>
     </aside>
 
     <!-- Main -->
@@ -1389,12 +1755,16 @@
                 <path d="M4 6h16M4 12h16M4 18h16" stroke="#15803D" stroke-width="2" stroke-linecap="round"/>
               </svg>
             </button>
-            <span>Olá, Bibliotecária 👋</span>
+            <span id="helloText">Olá, Bibliotecária 👋</span>
           </div>
-          <div class="subtitle">Sistema de Biblioteca</div>
+          <div class="subtitle" id="subtitleText">Sistema de Biblioteca</div>
         </div>
 
         <div class="right" id="topbarRight">
+          <button class="icon-btn theme-btn" id="btnPersonalizarTema" type="button" title="Personalizar Cores, Foto e Plano de Fundo" aria-label="Personalizar Tema">
+            <span style="font-size: 19px;">🎨</span>
+          </button>
+
           <button class="icon-btn notif-btn" id="notifBellBtn" type="button" title="Central de Notificações de Prazos" aria-label="Notificações">
             <span style="font-size: 19px;">🔔</span>
             <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
@@ -1407,7 +1777,7 @@
         </div>
       </div>
 
-      <!-- Alert Banner (Overdue notification on Dashboard) -->
+      <!-- ============ DASHBOARD (apenas painel resumo) ============ -->
       <div id="dashboardAlertBanner" class="alert-banner" style="display:none; margin-top: 16px;" data-section="dashboard">
         <div class="alert-banner-content">
           <div class="alert-banner-icon">⚠️</div>
@@ -1419,15 +1789,33 @@
         <button type="button" class="btn-small danger" id="btnVerNotificacoesBanner">Ver Alunos em Atraso</button>
       </div>
 
-      <!-- Stats -->
-      <section class="stats active" aria-label="Estatísticas" data-section="dashboard">
-
+      <section class="stats active" aria-label="Resumo da biblioteca" data-section="dashboard" id="secDashboard">
         <div class="stat-card">
           <div class="stat-top">
             <div>
               <div class="stat-icon"><span class="stat-emoji">📚</span></div>
               <div class="stat-number" id="statLivros">0</div>
               <div class="stat-label">Livros cadastrados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.25)"><span class="stat-emoji">🟢</span></div>
+              <div class="stat-number" id="statDisponiveis">0</div>
+              <div class="stat-label">Exemplares disponíveis</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(168, 85, 247, 0.10); border-color: rgba(168, 85, 247, 0.25)"><span class="stat-emoji">📤</span></div>
+              <div class="stat-number" id="statEmprestados">0</div>
+              <div class="stat-label">Livros emprestados</div>
             </div>
           </div>
         </div>
@@ -1457,159 +1845,277 @@
             <div>
               <div class="stat-icon" style="background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.25)"><span class="stat-emoji">⚠️</span></div>
               <div class="stat-number" id="statEmprestimosVencidos" style="color: var(--danger);">0</div>
-              <div class="stat-label">Prazos vencidos</div>
+              <div class="stat-label">Empréstimos atrasados</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-top">
+            <div>
+              <div class="stat-icon" style="background: rgba(34, 197, 94, 0.10); border-color: rgba(34, 197, 94, 0.25)"><span class="stat-emoji">📥</span></div>
+              <div class="stat-number" id="statDevolucoesHoje">0</div>
+              <div class="stat-label">Devoluções hoje</div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Gerenciamento (2 colunas) -->
-      <section class="panel-grid" aria-label="Gerenciamento">
-        <!-- Card: Cadastro de Livros -->
-        <section class="card legacy-section" id="secLivros" data-section="livros">
-          <header class="card-header">
-            <div>
-              <h2>📖 Cadastro de Livros</h2>
-              <small id="livrosCountSmall">0 livros</small>
-              <small class="muted" id="livrosDisponiveisSmall">0 disponíveis</small>
-            </div>
-            <small class="muted">Organize seu acervo</small>
-          </header>
-          <div class="card-body">
-            <!-- FORM (não alterar IDs existentes) -->
-            <form class="form-grid" id="livroForm">
-              <div class="row two">
-                <div>
-                  <label for="livroTitulo">Título</label>
-                  <input id="livroTitulo" required placeholder="Ex.: Dom Casmurro" maxlength="120" />
-                </div>
-                <div>
-                  <label for="livroAutor">Autor</label>
-                  <input id="livroAutor" required placeholder="Ex.: Machado de Assis" maxlength="120" />
-                </div>
-              </div>
-
-              <div class="row two">
-                <div>
-                  <label for="livroCategoria">Categoria</label>
-                  <select id="livroCategoria" required>
-                    <option value="">Selecione...</option>
-                    <option>Romance</option>
-                    <option>Comédia</option>
-                    <option>Fantasia</option>
-                    <option>Aventura</option>
-                    <option>Suspense</option>
-                    <option>Ficção Científica</option>
-                    <option>Biografia</option>
-                    <option>História</option>
-                    <option>Outro</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="livroAcervo">Quantidade (exemplares)</label>
-                  <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
-                </div>
-              </div>
-
-              <div class="actions">
-                <button type="submit">Cadastrar livro</button>
-                <button type="button" class="secondary" id="btnAbrirScannerLivro">📷 Ler QR / Código de Barras (ISBN)</button>
-                <button type="button" class="secondary" id="livroExportar">Exportar dados</button>
-              </div>
-            </form>
-
-            <!-- Tabela Livros Cadastrados -->
-            <div class="table-wrap">
-              <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
-                <input id="livroBusca" placeholder="Buscar por título, autor ou categoria..." style="flex:1; min-width: 220px;" />
-                <button type="button" class="secondary btn-small" id="livroLimparBusca">Limpar</button>
-              </div>
-
-              <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
-                <button type="button" class="secondary btn-small" id="livrosPopularBtn">Popular 300 livros (opcional)</button>
-                <span class="pill" style="border-color: var(--border);">Dica: Empréstimos já usam livros populares</span>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Título</th>
-                    <th>Autor</th>
-                    <th>Categoria</th>
-                    <th>Exemplares</th>
-                    <th style="width: 170px; text-align:right;">Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="livrosBody"></tbody>
-              </table>
-              <div class="empty" id="livrosEmpty" style="display:none;">Nenhum livro cadastrado.</div>
-            </div>
+      <section class="card full-width" data-section="dashboard" style="margin-top: 12px;">
+        <header class="card-header">
+          <div>
+            <h2>📥 Devoluções recentes</h2>
+            <small>Últimas devoluções registradas no sistema</small>
           </div>
-        </section>
-
-        <!-- Card: Cadastro de Alunos -->
-        <section class="card legacy-section" id="secAlunos" data-section="alunos">
-          <header class="card-header">
-            <div>
-              <h2>👨 Cadastro de Alunos</h2>
-              <small id="alunosCountSmall">0 alunos</small>
-            </div>
-            <small class="muted">Gerencie turmas</small>
-          </header>
-          <div class="card-body">
-            <form class="form-grid" id="alunoForm">
-              <div class="row two">
-                <div>
-                  <label for="alunoNome">Nome do aluno</label>
-                  <input id="alunoNome" required placeholder="Ex.: Maria Silva" maxlength="80" />
-                </div>
-                <div>
-                  <label for="alunoTurma">Turma</label>
-                  <input id="alunoTurma" required placeholder="Ex.: 7ºA" maxlength="20" />
-                </div>
-              </div>
-
-              <div class="actions">
-                <button type="submit">Cadastrar aluno</button>
-                <button type="button" class="secondary" id="alunoExportar">Exportar dados</button>
-              </div>
-            </form>
-
-            <div class="table-wrap">
-              <div class="actions" style="margin-top:0; margin-bottom:12px;">
-                <input id="alunoBusca" placeholder="Buscar por nome ou turma..." style="flex:1; min-width: 220px;" />
-                <button type="button" class="secondary btn-small" id="alunoLimparBusca">Limpar</button>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Turma</th>
-                    <th style="width: 170px; text-align:right;">Ações</th>
-                  </tr>
-                </thead>
-                <tbody id="alunosBody"></tbody>
-              </table>
-              <div class="empty" id="alunosEmpty" style="display:none;">Nenhum aluno cadastrado.</div>
-            </div>
+          <small class="muted">Dados reais</small>
+        </header>
+        <div class="card-body">
+          <div class="table-wrap" style="margin-top:0;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Turma</th>
+                  <th>Livro</th>
+                  <th>Devolvido em</th>
+                  <th>Conservação</th>
+                </tr>
+              </thead>
+              <tbody id="devolucoesRecentesBody"></tbody>
+            </table>
+            <div class="empty" id="devolucoesRecentesEmpty" style="display:none;">Nenhuma devolução registrada ainda.</div>
           </div>
-        </section>
+        </div>
       </section>
 
-      <!-- Empréstimos (full width) -->
-        <section class="card full-width" id="secEmprestimos" data-section="emprestimos">
+      <!-- ============ ALUNOS ============ -->
+      <section class="card full-width legacy-section" id="secAlunos" data-section="alunos">
+        <header class="card-header">
+          <div>
+            <h2>👨 Gerenciamento de Alunos</h2>
+            <small id="alunosCountSmall">0 alunos</small>
+          </div>
+          <small class="muted">Cadastro, turmas e reputação</small>
+        </header>
+        <div class="card-body">
+          <form class="form-grid" id="alunoForm">
+            <div class="row two">
+              <div>
+                <label for="alunoNome">Nome do aluno</label>
+                <input id="alunoNome" required placeholder="Ex.: Maria Silva" maxlength="80" />
+              </div>
+              <div>
+                <label for="alunoTurma">Sala / Turma</label>
+                <select id="alunoTurma" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+            </div>
 
+            <div class="actions">
+              <button type="submit">Cadastrar aluno</button>
+              <button type="button" class="secondary" id="btnAbrirModalDed">📥 Importar do DED</button>
+              <button type="button" class="secondary" id="alunoExportar">Exportar dados</button>
+            </div>
+          </form>
 
+          <div class="table-wrap">
+            <div class="actions" style="margin-top:0; margin-bottom:12px;">
+              <input id="alunoBusca" placeholder="Buscar por nome ou turma..." style="flex:1; min-width: 220px;" />
+              <button type="button" class="secondary btn-small" id="alunoLimparBusca">Limpar</button>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Turma</th>
+                  <th>Empréstimos</th>
+                  <th>Avaliação</th>
+                  <th style="width: 170px; text-align:right;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="alunosBody"></tbody>
+            </table>
+            <div class="empty" id="alunosEmpty" style="display:none;">Nenhum aluno cadastrado.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LIVROS ============ -->
+      <section class="card full-width legacy-section" id="secLivros" data-section="livros">
+        <header class="card-header">
+          <div>
+            <h2>📖 Gerenciamento de Livros</h2>
+            <small id="livrosCountSmall">0 livros</small>
+            <small class="muted" id="livrosDisponiveisSmall">0 disponíveis</small>
+          </div>
+          <small class="muted">Organize seu acervo</small>
+        </header>
+        <div class="card-body">
+          <form class="form-grid" id="livroForm">
+            <div class="row two">
+              <div>
+                <label for="livroTitulo">Título</label>
+                <input id="livroTitulo" required placeholder="Ex.: Dom Casmurro" maxlength="120" />
+              </div>
+              <div>
+                <label for="livroAutor">Autor</label>
+                <input id="livroAutor" required placeholder="Ex.: Machado de Assis" maxlength="120" />
+              </div>
+            </div>
+
+            <div class="row three">
+              <div>
+                <label for="livroCategoria">Categoria</label>
+                <select id="livroCategoria" required>
+                  <option value="">Selecione...</option>
+                  <option>Romance</option>
+                  <option>Comédia</option>
+                  <option>Fantasia</option>
+                  <option>Aventura</option>
+                  <option>Suspense</option>
+                  <option>Ficção Científica</option>
+                  <option>Biografia</option>
+                  <option>História</option>
+                  <option>Outro</option>
+                </select>
+              </div>
+              <div>
+                <label for="livroAcervo">Quantidade (exemplares)</label>
+                <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
+              </div>
+              <div>
+                <label for="livroCapa">URL da capa (opcional)</label>
+                <input id="livroCapa" type="url" placeholder="https://exemplo.com/capa.jpg" />
+              </div>
+            </div>
+
+            <div class="actions" style="align-items:center;">
+              <button type="submit">Cadastrar livro</button>
+              <button type="button" class="secondary" id="btnAbrirScannerLivro">📷 Ler QR / Código de Barras (ISBN)</button>
+              <button type="button" class="secondary" id="livroExportar">Exportar dados</button>
+              <img id="livroCapaPreview" src="" alt="" style="display:none; width:44px; height:60px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" />
+            </div>
+          </form>
+
+          <div class="table-wrap">
+            <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center; gap:10px; flex-wrap:wrap;">
+              <input id="livroBusca" placeholder="🔍 Buscar por título, autor ou categoria..." style="flex:1; min-width: 220px;" />
+              <div style="min-width: 210px;">
+                <select id="livroOrdenacao" style="height: 46px;">
+                  <option value="alfabetica-asc">🔤 Ordem Alfabética (A - Z)</option>
+                  <option value="alfabetica-desc">🔤 Ordem Alfabética (Z - A)</option>
+                  <option value="categoria">📚 Separar por Tema / Categoria</option>
+                  <option value="mais-emprestados">📈 Mais Emprestados</option>
+                  <option value="menos-emprestados">📉 Menos Emprestados</option>
+                  <option value="autor">✍️ Autor (A - Z)</option>
+                  <option value="disponiveis">🟢 Mais Disponíveis</option>
+                </select>
+              </div>
+              <button type="button" class="secondary btn-small" id="livroLimparBusca">Limpar</button>
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 64px;">Capa</th>
+                  <th>Título</th>
+                  <th>Autor</th>
+                  <th>Categoria</th>
+                  <th>Exemplares</th>
+                  <th>Disponíveis</th>
+                  <th style="width: 200px; text-align:right;">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="livrosBody"></tbody>
+            </table>
+            <div class="empty" id="livrosEmpty" style="display:none;">Nenhum livro cadastrado.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ ESTANTE ============ -->
+      <section class="card full-width legacy-section" id="secEstante" data-section="estante">
+        <header class="card-header">
+          <div>
+            <h2>📚 Estante da Biblioteca</h2>
+            <small>Visualize o acervo com as capas dos livros</small>
+          </div>
+          <small class="muted" id="estanteTotalLivros">0 livros no acervo</small>
+        </header>
+        <div class="card-body">
+          <div class="shelf-toolbar">
+            <div class="shelf-filters">
+              <div style="min-width: 170px;">
+                <label style="margin-bottom: 4px;">Agrupar por:</label>
+                <select id="shelfGroupBy" style="height: 38px; font-size: 13px;">
+                  <option value="categoria">📂 Gênero / Categoria</option>
+                  <option value="autor">✍️ Autor</option>
+                  <option value="disponibilidade">🟢 Disponibilidade</option>
+                  <option value="nenhum">🏢 Estante Única</option>
+                </select>
+              </div>
+
+              <div style="min-width: 170px;">
+                <label style="margin-bottom: 4px;">Ordenar por:</label>
+                <select id="shelfSortBy" style="height: 38px; font-size: 13px;">
+                  <option value="titulo-asc">🔤 Título (A - Z)</option>
+                  <option value="titulo-desc">🔤 Título (Z - A)</option>
+                  <option value="autor-asc">✍️ Autor (A - Z)</option>
+                  <option value="acervo-desc">📦 Quantidade de Exemplares</option>
+                  <option value="recentes">🕒 Mais Recentes</option>
+                  <option value="populares">⭐ Mais Populares</option>
+                </select>
+              </div>
+
+              <div style="min-width: 150px;">
+                <label style="margin-bottom: 4px;">Filtrar Categoria:</label>
+                <select id="shelfFilterCategory" style="height: 38px; font-size: 13px;">
+                  <option value="">Todas as Categorias</option>
+                </select>
+              </div>
+
+              <div style="min-width: 150px;">
+                <label style="margin-bottom: 4px;">Filtrar Status:</label>
+                <select id="shelfFilterStatus" style="height: 38px; font-size: 13px;">
+                  <option value="">Todos os Status</option>
+                  <option value="disponivel">Apenas Disponíveis</option>
+                  <option value="emprestado">Apenas Emprestados</option>
+                </select>
+              </div>
+
+              <div style="flex: 1; min-width: 180px;">
+                <label style="margin-bottom: 4px;">Buscar na Estante:</label>
+                <input id="shelfSearchInput" placeholder="Buscar título ou autor..." style="height: 38px; font-size: 13px;" />
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+              <label style="margin-bottom: 0;">Visualização:</label>
+              <div class="shelf-view-toggle">
+                <button type="button" class="shelf-view-btn active" id="btnViewSpines" title="Estante de madeira com livros em pé">🪵 Estante</button>
+                <button type="button" class="shelf-view-btn" id="btnViewGrid" title="Catálogo em cards com capas">🖼️ Catálogo</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="shelfContainer" class="shelf-rack">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ EMPRÉSTIMOS ============ -->
+      <section class="card full-width" id="secEmprestimos" data-section="emprestimos">
         <header class="card-header">
           <div>
             <h2>🔄 Empréstimos</h2>
-            <small>Cadastro, pesquisa e tabela em um único card</small>
+            <small>Registro com estado de conservação do livro</small>
           </div>
           <small class="muted">Retirada e devolução</small>
         </header>
         <div class="card-body">
-          <!-- Cadastro -->
           <div class="form-grid" style="margin-bottom: 16px;">
             <div class="row two">
               <div>
@@ -1650,9 +2156,25 @@
                 </div>
               </div>
             </div>
+
+            <div class="row two">
+              <div>
+                <label for="emprestimoEstadoSaida">Estado do livro na saída</label>
+                <select id="emprestimoEstadoSaida">
+                  <option value="Novo">Novo</option>
+                  <option value="Ótimo" selected>Ótimo</option>
+                  <option value="Bom">Bom</option>
+                  <option value="Regular">Regular</option>
+                  <option value="Danificado">Danificado</option>
+                </select>
+              </div>
+              <div>
+                <label for="emprestimoObsSaida">Observações na saída (opcional)</label>
+                <input id="emprestimoObsSaida" placeholder="Ex.: Pequeno rasgo na capa." maxlength="200" />
+              </div>
+            </div>
           </div>
 
-          <!-- Pesquisa + Filtros + Tabela -->
           <div class="table-wrap" style="margin-top:0;">
             <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
               <input id="emprestimoBusca" placeholder="Buscar por aluno, turma, livro ou status..." style="flex:1; min-width: 220px;" />
@@ -1676,7 +2198,7 @@
                   <th>Prazo Limite</th>
                   <th>Status</th>
                   <th>Devolução</th>
-                  <th style="width: 170px; text-align:right;">Ações</th>
+                  <th style="width: 230px; text-align:right;">Ações</th>
                 </tr>
               </thead>
               <tbody id="emprestimosBody"></tbody>
@@ -1686,139 +2208,63 @@
         </div>
       </section>
 
-      <!-- Relatórios (placeholder) -->
-      <section class="card full-width legacy-section" id="secRelatorios">
+      <!-- ============ RELATÓRIOS ============ -->
+      <section class="card full-width legacy-section" id="secRelatorios" data-section="relatorios">
         <header class="card-header">
           <div>
             <h2>📊 Relatórios</h2>
-            <small>Visão geral e exportação de dados</small>
+            <small>Relatórios reais com período, impressão e exportação</small>
           </div>
-          <small class="muted">Em breve</small>
+          <small class="muted">Dados do sistema</small>
         </header>
         <div class="card-body">
-          <div class="row two">
-            <div>
-              <label>Resumo rápido</label>
-              <div id="relatorioResumo" class="empty" style="margin-top:0; padding-top:0;">Selecione uma área no menu para começar.</div>
+          <div class="report-toolbar">
+            <div class="field">
+              <label for="relatorioPeriodo">Período</label>
+              <select id="relatorioPeriodo" style="height: 46px;">
+                <option value="geral">Geral (todo o histórico)</option>
+                <option value="hoje">Hoje</option>
+                <option value="7d">Últimos 7 dias</option>
+                <option value="30d">Últimos 30 dias</option>
+                <option value="mes">Mês atual</option>
+                <option value="ano">Ano atual</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
             </div>
-            <div>
-              <label>Ações</label>
-              <div class="actions" style="margin-top:0;">
-                <button type="button" class="secondary" id="gerarRelatorioBtn">Gerar relatório</button>
-                <button type="button" class="secondary" id="exportarPdfBtn">Exportar PDF</button>
-                <button type="button" class="secondary" id="limparRelatoriosBtn">Apagar relatórios</button>
-              </div>
+            <div class="field" id="relatorioDeField" style="display:none;">
+              <label for="relatorioDe">De</label>
+              <input type="date" id="relatorioDe" />
+            </div>
+            <div class="field" id="relatorioAteField" style="display:none;">
+              <label for="relatorioAte">Até</label>
+              <input type="date" id="relatorioAte" />
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" id="gerarRelatorioBtn">📋 Gerar relatório</button>
+              <button type="button" class="secondary" id="exportarPdfBtn">🖨️ Imprimir / PDF</button>
+              <button type="button" class="secondary" id="exportarCsvBtn">📄 Exportar CSV</button>
+              <button type="button" class="secondary" id="limparRelatoriosBtn">🗑️ Apagar relatórios salvos</button>
             </div>
           </div>
 
-          <div class="table-wrap">
-            <label>Histórico de atividades</label>
-            <table>
-              <thead>
-                <tr>
-                  <th>Atividade</th>
-                </tr>
-              </thead>
-              <tbody id="relatoriosBody"></tbody>
-            </table>
-            <div class="empty" id="relatoriosEmpty" style="display:none;">Nenhuma atividade registrada ainda.</div>
+          <div id="reportArea" class="report-area">
+            <div class="empty" style="padding:0;">Clique em <strong>Gerar relatório</strong> para visualizar o movimento de empréstimos do período — quem pegou cada livro, quando pegou e em que estado o livro estava.</div>
+          </div>
+
+          <div class="report-section" style="margin-top: 20px;">
+            <h4>💾 Relatórios salvos</h4>
+            <div class="actions" style="margin-top:0; margin-bottom:4px;">
+              <button type="button" class="secondary btn-small" id="salvarRelatorioBtn">💾 Salvar relatório atual</button>
+              <button type="button" class="secondary btn-small" id="recarregarSalvosBtn">🔄 Recarregar lista</button>
+            </div>
+            <div id="savedReportsList" class="saved-reports"></div>
+            <div class="empty" id="savedReportsEmpty" style="display:none;">Nenhum relatório salvo ainda. Gere um relatório e clique em "Salvar relatório atual".</div>
           </div>
         </div>
       </section>
 
-      <!-- Prateleira Virtual (nova seção completa) -->
-      <section class="card full-width legacy-section" id="secPrateleira" data-section="prateleira">
-        <header class="card-header">
-          <div>
-            <h2>📚 Prateleira Virtual da Biblioteca</h2>
-            <small>Organize, visualize e explore seu acervo de forma visual e intuitiva</small>
-          </div>
-          <small class="muted" id="prateleiraTotalLivros">0 livros no acervo</small>
-        </header>
-        <div class="card-body">
-          <!-- Toolbar de controles do Admin -->
-          <div class="shelf-toolbar">
-            <div class="shelf-filters">
-              <div style="min-width: 170px;">
-                <label style="margin-bottom: 4px;">Agrupar Estantes por:</label>
-                <select id="shelfGroupBy" style="height: 38px; font-size: 13px;">
-                  <option value="categoria">📂 Gênero / Categoria</option>
-                  <option value="autor">✍️ Autor</option>
-                  <option value="disponibilidade">🟢 Disponibilidade</option>
-                  <option value="nenhum">🏢 Estante Única</option>
-                </select>
-              </div>
-
-              <div style="min-width: 170px;">
-                <label style="margin-bottom: 4px;">Ordenar Livros por:</label>
-                <select id="shelfSortBy" style="height: 38px; font-size: 13px;">
-                  <option value="titulo-asc">🔤 Título (A - Z)</option>
-                  <option value="titulo-desc">🔤 Título (Z - A)</option>
-                  <option value="autor-asc">✍️ Autor (A - Z)</option>
-                  <option value="acervo-desc">📦 Quantidade de Exemplares</option>
-                  <option value="recentes">🕒 Mais Recentes</option>
-                  <option value="populares">⭐ Mais Populares</option>
-                </select>
-              </div>
-
-              <div style="min-width: 150px;">
-                <label style="margin-bottom: 4px;">Filtrar Categoria:</label>
-                <select id="shelfFilterCategory" style="height: 38px; font-size: 13px;">
-                  <option value="">Todas as Categorias</option>
-                </select>
-              </div>
-
-              <div style="min-width: 150px;">
-                <label style="margin-bottom: 4px;">Filtrar Status:</label>
-                <select id="shelfFilterStatus" style="height: 38px; font-size: 13px;">
-                  <option value="">Todos os Status</option>
-                  <option value="disponivel">Apenas Disponíveis</option>
-                  <option value="esgotado">Esgotados / Emprestados</option>
-                </select>
-              </div>
-
-              <div style="flex: 1; min-width: 180px;">
-                <label style="margin-bottom: 4px;">Buscar na Prateleira:</label>
-                <input id="shelfSearchInput" placeholder="Buscar título ou autor..." style="height: 38px; font-size: 13px;" />
-              </div>
-            </div>
-
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-              <label style="margin-bottom: 0;">Visualização:</label>
-              <div class="shelf-view-toggle">
-                <button type="button" class="shelf-view-btn active" id="btnViewSpines" title="Visualizar Estantes de Madeira">🪵 Estante</button>
-                <button type="button" class="shelf-view-btn" id="btnViewGrid" title="Visualizar Cards de Livros">🖼️ Catálogo</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Container dinâmico das prateleiras -->
-          <div id="shelfContainer" class="shelf-rack">
-            <!-- Renderizado dinamicamente pelo JS -->
-          </div>
-        </div>
-      </section>
-
-      <!-- Ranking -->
-      <section class="card full-width legacy-section" id="secRanking" data-section="ranking">
-        <header class="card-header">
-          <div>
-            <h2>🏆 Ranking</h2>
-            <small>Indicadores de desempenho do mês atual</small>
-          </div>
-          <small class="muted">Dados atualizados automaticamente</small>
-        </header>
-        <div class="card-body">
-          <div class="panel-grid">
-            <section class="card" id="rankingAlunoCard" aria-label="Aluno mais ativo do mês"></section>
-            <section class="card" id="rankingLivroCard" aria-label="Livro mais lido do mês"></section>
-          </div>
-        </div>
-      </section>
-
-      <!-- Backup e Limpeza (último) -->
-      <section class="card backup full-width" id="secBackup">
-
+      <!-- Backup e Limpeza (dentro de Relatórios) -->
+      <section class="card backup full-width" id="secBackup" data-section="relatorios">
         <header class="card-header">
           <div>
             <h2>Backup e Limpeza</h2>
@@ -1839,12 +2285,133 @@
 
             <div>
               <label>Reset</label>
-              <div class="empty" style="margin-top:0; padding-top:0;">Vai apagar alunos, livros e empréstimos cadastrados neste navegador.</div>
+              <div class="empty" style="margin-top:0; padding-top:0;">Vai apagar alunos, livros e empréstimos cadastrados no sistema.</div>
               <div class="actions" style="margin-top:12px;">
                 <button type="button" class="danger" id="resetBtn">Apagar tudo</button>
               </div>
               <div class="empty" style="margin-top:12px; padding-top:0;">Dica: exporte antes de resetar.</div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ RANKING ============ -->
+      <section class="card full-width legacy-section" id="secRanking" data-section="ranking">
+        <header class="card-header">
+          <div>
+            <h2>🏆 Ranking</h2>
+            <small>Alunos e salas com base nos empréstimos reais</small>
+          </div>
+          <small class="muted">Atualizado automaticamente</small>
+        </header>
+        <div class="card-body">
+          <div class="report-toolbar">
+            <div class="field">
+              <label for="rankingPeriodo">Período</label>
+              <select id="rankingPeriodo" style="height: 46px;">
+                <option value="geral">Ranking geral</option>
+                <option value="mes">Ranking do mês</option>
+                <option value="ano">Ranking do ano</option>
+                <option value="personalizado">Personalizado</option>
+              </select>
+            </div>
+            <div class="field" id="rankingDeField" style="display:none;">
+              <label for="rankingDe">De</label>
+              <input type="date" id="rankingDe" />
+            </div>
+            <div class="field" id="rankingAteField" style="display:none;">
+              <label for="rankingAte">Até</label>
+              <input type="date" id="rankingAte" />
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" id="rankingAtualizarBtn">🔄 Atualizar</button>
+            </div>
+          </div>
+
+          <div class="ranking-tabs">
+            <button type="button" class="ranking-tab active" data-ranking-tab="alunos">👨 Alunos</button>
+            <button type="button" class="ranking-tab" data-ranking-tab="salas">🏫 Salas / Turmas</button>
+          </div>
+
+          <!-- Ranking de Alunos -->
+          <div id="rankingAlunosContainer">
+            <div class="panel-grid" style="margin-top:0;">
+              <section class="card" id="rankingLeitoresCard">
+                <header class="card-header">
+                  <div><h2>📈 Mais leitores</h2><small>Por quantidade de empréstimos</small></div>
+                </header>
+                <div class="card-body">
+                  <div class="table-wrap" style="margin-top:0;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="width:60px;">Pos.</th>
+                          <th>Nome</th>
+                          <th>Sala</th>
+                          <th>Empréstimos</th>
+                          <th>Devolvidos</th>
+                          <th>Atrasos</th>
+                          <th>Avaliação</th>
+                        </tr>
+                      </thead>
+                      <tbody id="rankingLeitoresBody"></tbody>
+                    </table>
+                    <div class="empty" id="rankingLeitoresEmpty" style="display:none;">Nenhum empréstimo registrado ainda.</div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="card" id="rankingReputacaoCard">
+                <header class="card-header">
+                  <div><h2>⭐ Melhor reputação</h2><small>Prazos e conservação dos livros</small></div>
+                </header>
+                <div class="card-body">
+                  <div class="table-wrap" style="margin-top:0;">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="width:60px;">Pos.</th>
+                          <th>Nome</th>
+                          <th>Sala</th>
+                          <th>Empréstimos</th>
+                          <th>Devolvidos</th>
+                          <th>Atrasos</th>
+                          <th>Avaliação</th>
+                        </tr>
+                      </thead>
+                      <tbody id="rankingReputacaoBody"></tbody>
+                    </table>
+                    <div class="empty" id="rankingReputacaoEmpty" style="display:none;">Nenhum empréstimo registrado ainda.</div>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </div>
+
+          <!-- Ranking de Salas -->
+          <div id="rankingSalasContainer" style="display:none;">
+            <section class="card">
+              <header class="card-header">
+                <div><h2>🏫 Salas que mais leram</h2><small>Empréstimos por turma no período</small></div>
+              </header>
+              <div class="card-body">
+                <div class="table-wrap" style="margin-top:0;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width:60px;">Pos.</th>
+                        <th>Sala / Turma</th>
+                        <th>Empréstimos</th>
+                        <th>Alunos participantes</th>
+                        <th>Devolvidos no prazo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rankingSalasBody"></tbody>
+                  </table>
+                  <div class="empty" id="rankingSalasEmpty" style="display:none;">Nenhum empréstimo registrado ainda.</div>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       </section>
@@ -1977,7 +2544,7 @@
     </div>
   </div>
 
-  <!-- Modal: Detalhes do Livro (Prateleira Virtual) -->
+  <!-- Modal: Detalhes do Livro (Estante) -->
   <div class="modal-backdrop" id="modalDetalhesLivro" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header" id="detalhesHeader">
@@ -1995,45 +2562,411 @@
     </div>
   </div>
 
+  <!-- Modal: Devolução com estado de conservação -->
+  <div class="modal-backdrop" id="modalDevolucao" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📥 Registrar Devolução</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalDevolucao">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="devolucaoInfo" style="margin-bottom: 14px; font-size: 13px; font-weight: 800; color: var(--muted);"></div>
+
+        <div class="estado-comparacao" id="devolucaoComparacao">
+          <div class="estado-box">
+            <div class="titulo">Estado na saída</div>
+            <div class="valor" id="devolucaoEstadoSaida">—</div>
+          </div>
+          <div class="estado-seta">➜</div>
+          <div class="estado-box">
+            <div class="titulo">Estado na devolução</div>
+            <div class="valor" id="devolucaoEstadoPreview">—</div>
+          </div>
+        </div>
+
+        <div class="aviso-deterioracao" id="avisoDeterioracao">
+          ⚠️ Atenção: o livro está sendo devolvido em estado <strong>PIOR</strong> do que na saída. Registre as observações abaixo.
+        </div>
+
+        <div class="form-grid">
+          <div class="row two">
+            <div>
+              <label for="devolucaoData">Data da devolução</label>
+              <input type="date" id="devolucaoData" />
+            </div>
+            <div>
+              <label for="devolucaoEstado">Estado do livro na devolução</label>
+              <select id="devolucaoEstado">
+                <option value="Novo">Novo</option>
+                <option value="Ótimo">Ótimo</option>
+                <option value="Bom">Bom</option>
+                <option value="Regular">Regular</option>
+                <option value="Danificado">Danificado</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="devolucaoObs">Observações da devolução (opcional)</label>
+            <input id="devolucaoObs" placeholder="Ex.: Pequeno rasgo na capa." maxlength="200" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalDevolucao">Cancelar</button>
+        <button type="button" id="confirmarDevolucaoBtn">✅ Confirmar devolução</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Histórico do Empréstimo -->
+  <div class="modal-backdrop" id="modalHistorico" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>🗂️ Histórico do Empréstimo</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalHistorico">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="historicoConteudo">
+          <!-- Preenchido dinamicamente -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalHistorico">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Aluno -->
+  <div class="modal-backdrop" id="modalEditarAluno" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>✏️ Editar Aluno</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalEditarAluno">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div>
+            <label for="editarAlunoNome">Nome do aluno</label>
+            <input id="editarAlunoNome" required maxlength="80" />
+          </div>
+          <div>
+            <label for="editarAlunoTurma">Sala / Turma</label>
+            <select id="editarAlunoTurma" required>
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalEditarAluno">Cancelar</button>
+        <button type="button" id="salvarEdicaoAlunoBtn">💾 Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Editar Livro -->
+  <div class="modal-backdrop" id="modalEditarLivro" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>✏️ Editar Livro</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalEditarLivro">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="row two">
+            <div>
+              <label for="editarLivroTitulo">Título</label>
+              <input id="editarLivroTitulo" required maxlength="120" />
+            </div>
+            <div>
+              <label for="editarLivroAutor">Autor</label>
+              <input id="editarLivroAutor" required maxlength="120" />
+            </div>
+          </div>
+          <div class="row three">
+            <div>
+              <label for="editarLivroCategoria">Categoria</label>
+              <select id="editarLivroCategoria" required>
+                <option value="">Selecione...</option>
+                <option>Romance</option>
+                <option>Comédia</option>
+                <option>Fantasia</option>
+                <option>Aventura</option>
+                <option>Suspense</option>
+                <option>Ficção Científica</option>
+                <option>Biografia</option>
+                <option>História</option>
+                <option>Outro</option>
+              </select>
+            </div>
+            <div>
+              <label for="editarLivroAcervo">Exemplares</label>
+              <input id="editarLivroAcervo" type="number" min="1" step="1" required />
+            </div>
+            <div>
+              <label for="editarLivroCapa">URL da capa</label>
+              <input id="editarLivroCapa" type="url" placeholder="https://..." />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalEditarLivro">Cancelar</button>
+        <button type="button" id="salvarEdicaoLivroBtn">💾 Salvar alterações</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Importar Alunos do DED (Diário Escolar Digital) -->
+  <div class="modal-backdrop" id="modalImportarDed" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header" style="background: linear-gradient(180deg, #ecfdf5, #fff);">
+        <h3>📥 Importar Alunos do DED (Diário Escolar Digital)</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalImportarDed">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--muted); margin-top: 0; line-height: 1.5;">
+          Importe turmas inteiras e listas de alunos copiadas diretamente do <strong>DED (Diário Escolar Digital)</strong> ou de arquivos CSV/TXT. O sistema reconhece automaticamente os nomes e as turmas.
+        </p>
+
+        <div class="row two" style="margin-bottom: 14px;">
+          <div>
+            <label for="dedTurmaPadrao">Turma padrão (caso a lista não informe a turma):</label>
+            <select id="dedTurmaPadrao">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div>
+            <label for="dedArquivoInput">Ou carregar arquivo (.csv / .txt):</label>
+            <input id="dedArquivoInput" type="file" accept=".csv,.txt,.tsv" style="padding: 8px 12px; height: 46px;" />
+          </div>
+        </div>
+
+        <div>
+          <label for="dedTextoInput">Cole aqui o texto ou tabela copiada do DED:</label>
+          <textarea id="dedTextoInput" rows="6" style="font-family: monospace; font-size: 12px;" placeholder="Exemplos aceitos:&#10;1  1234567  Maria Silva Santos  7ºA&#10;2  7654321  João Pedro Costa    7ºA&#10;&#10;Ou formato CSV / Separado por ponto e vírgula:&#10;Nome;Turma&#10;Ana Paula;8ºB&#10;Carlos Souza;8ºB&#10;&#10;Ou apenas lista de nomes (usará a turma padrão acima):&#10;Lucas Ferreira&#10;Beatriz Ramos"></textarea>
+        </div>
+
+        <div class="actions" style="margin-top: 10px; margin-bottom: 14px;">
+          <button type="button" class="secondary" id="btnDedProcessar">🔍 Analisar e Pré-visualizar Alunos</button>
+          <button type="button" class="secondary" id="btnDedLimpar">Limpar</button>
+        </div>
+
+        <div id="dedPreviewContainer" style="display: none; border-top: 1px solid var(--border); padding-top: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+            <h4 style="margin: 0; font-size: 14px; font-weight: 900; color: var(--text);">
+              Alunos identificados (<span id="dedTotalEncontrados">0</span>)
+            </h4>
+            <label style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
+              <input type="checkbox" id="dedIgnorarDuplicados" checked style="width: auto; height: auto;" /> Ignorar alunos com mesmo nome já cadastrados
+            </label>
+          </div>
+
+          <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px;">
+            <table style="border: 0; margin: 0;">
+              <thead>
+                <tr>
+                  <th style="padding: 8px 12px; width: 40px;">#</th>
+                  <th style="padding: 8px 12px;">Nome do Aluno</th>
+                  <th style="padding: 8px 12px;">Turma</th>
+                  <th style="padding: 8px 12px; width: 140px;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="dedPreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="secondary" data-close-modal="#modalImportarDed">Cancelar</button>
+        <button type="button" id="btnDedConfirmarImportacao" disabled style="background: var(--primary);">📥 Confirmar Importação</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Personalização de Cores, Fundo e Identidade Visual -->
+  <div class="modal-backdrop" id="modalPersonalizacao" role="dialog" aria-modal="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
+        <h3>🎨 Personalizar Cores, Fotos e Plano de Fundo</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalPersonalizacao">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
+
+        <div style="margin-bottom: 22px;">
+          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+            🎨 1. Escolha uma Paleta de Cores Rápida
+          </label>
+          <div class="theme-palettes-grid" id="themePalettesContainer">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+        </div>
+
+        <div style="margin-bottom: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px;">
+          <label style="font-size: 13px; font-weight: 900; margin-bottom: 10px; display: block;">
+            ✨ Ou defina suas próprias cores personalizadas:
+          </label>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+            <div>
+              <label for="themeColorPrimary" style="font-size: 11px;">Cor de Destaque / Botões:</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="color" id="themeColorPrimary" value="#22C55E" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                <span id="themeColorPrimaryHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#22C55E</span>
+              </div>
+            </div>
+            <div>
+              <label for="themeColorBg" style="font-size: 11px;">Cor de Fundo da Tela:</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="color" id="themeColorBg" value="#F8FAFC" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                <span id="themeColorBgHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#F8FAFC</span>
+              </div>
+            </div>
+            <div>
+              <label for="themeColorCard" style="font-size: 11px;">Cor dos Blocos / Cards:</label>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="color" id="themeColorCard" value="#FFFFFF" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                <span id="themeColorCardHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#FFFFFF</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 22px;">
+          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+            🖼️ 2. Plano de Fundo / Papel de Parede da Biblioteca
+          </label>
+
+          <div class="theme-wallpapers-grid" id="themeWallpapersContainer">
+            <!-- Renderizado dinamicamente pelo JS -->
+          </div>
+
+          <div style="border: 2px dashed var(--border); border-radius: 14px; padding: 14px; text-align: center; background: var(--card); margin-top: 10px;">
+            <div style="font-size: 26px; margin-bottom: 4px;">📷</div>
+            <label for="themeWallpaperFileInput" style="font-size: 13px; font-weight: 800; cursor: pointer; color: var(--primary-dark); display: block; margin-bottom: 4px;">
+              Clique aqui para enviar uma Foto ou Imagem do seu computador / celular
+            </label>
+            <input type="file" id="themeWallpaperFileInput" accept="image/*" style="display: none;" />
+            <small class="muted">Formatos: JPG, PNG, WEBP (será salvo automaticamente no seu navegador)</small>
+          </div>
+
+          <div id="themeBgControlsContainer" style="margin-top: 12px; display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label for="themeBgOpacity" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>Opacidade dos Blocos (Legibilidade)</span>
+                  <span id="themeBgOpacityVal">85%</span>
+                </label>
+                <input type="range" id="themeBgOpacity" min="30" max="100" value="85" style="width: 100%;" />
+              </div>
+              <div>
+                <label for="themeBgBlur" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                  <span>Desfoque Suave da Imagem</span>
+                  <span id="themeBgBlurVal">0px</span>
+                </label>
+                <input type="range" id="themeBgBlur" min="0" max="20" value="0" style="width: 100%;" />
+              </div>
+            </div>
+            <button type="button" class="danger btn-small" id="btnRemoverFundo" style="margin-top: 10px;">
+              🗑️ Remover Imagem de Fundo (Voltar ao Fundo Liso)
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+            🏛️ 3. Identidade da sua Biblioteca
+          </label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div>
+              <label for="themeLibraryName">Nome da Biblioteca:</label>
+              <input id="themeLibraryName" placeholder="Ex.: Sistema Biblioteca, Biblioteca Municipal..." maxlength="60" />
+            </div>
+            <div>
+              <label for="themeLibrarianName">Nome da Bibliotecária / Responsável:</label>
+              <input id="themeLibrarianName" placeholder="Ex.: Bibliotecária, Profª Mariana..." maxlength="50" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="secondary" id="btnRestaurarTemaPadrao">🔄 Restaurar Padrão Original</button>
+        <button type="button" id="btnSalvarTema" style="background: var(--primary);">💾 Salvar e Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirmar Restauração do Tema Padrão -->
+  <div class="modal-backdrop" id="modalConfirmarResetTema" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
+        <h3>🔄 Restaurar Visual Padrão</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarResetTema">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div style="text-align: center; margin-bottom: 16px;">
+          <div style="font-size: 44px; margin-bottom: 8px;">🎨</div>
+          <h4 style="margin: 0 0 8px; font-size: 16px; font-weight: 900; color: var(--text);">
+            Deseja realmente restaurar as configurações visuais?
+          </h4>
+          <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+            Todas as personalizações de <strong>cores</strong>, <strong>papel de parede / foto de fundo</strong> e <strong>identidade da biblioteca</strong> voltarão para a configuração original de fábrica (Verde Esmeralda e fundo limpo).
+          </p>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" class="secondary" data-close-modal="#modalConfirmarResetTema">Cancelar</button>
+        <button type="button" id="btnConfirmarRestauracaoTema" style="background: var(--primary);">✅ Sim, Restaurar Padrão</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toast (mantém id usado pelo JS) -->
   <div class="toast" id="toast"></div>
 
-  <!-- Vendor libraries (locais) -->
+  <!-- Vendor libraries (locais, opcionais) -->
   <script src="./assets/js/vendor/qrcode.min.js"></script>
   <script src="./assets/js/vendor/html5-qrcode.min.js"></script>
 
   <script>
-    // Bloqueio simples de acesso via front-end (para evitar uso acidental sem senha)
-    const LS_AUTH_KEY = 'biblioteca_auth_v1';
-    (function(){
-      try{
-        const raw = localStorage.getItem(LS_AUTH_KEY);
-        const data = raw ? JSON.parse(raw) : null;
-        if(!data || !data.ok) {
-          location.href = './login.html';
+    // Gerenciamento de sessão: verifica com o servidor se há sessão ativa.
+    // Se não houver, redireciona para o login.
+    (async function(){
+      try {
+        const res = await fetch('/api/auth/session', { credentials: 'include' });
+        if (!res.ok) {
+          window.location.href = './login.html';
         }
-      }catch{
-        location.href = './login.html';
+      } catch (e) {
+        // Servidor inacessível: deixa seguir (modo arquivo/local)
       }
     })();
   </script>
 
   <script>
-    // Alterna visibilidade das seções (sem depender do app.js)
+    // Navegação entre páginas independentes
     (function(){
       const navItems = document.querySelectorAll('.nav-item[data-nav]');
-      const sections = document.querySelectorAll('[data-section]');
+      const sections = document.querySelectorAll('main [data-section]');
+      const sidebar = document.getElementById('sidebar');
 
       function activate(sectionKey){
         sections.forEach(s => {
-          s.classList.toggle('active', s.getAttribute('data-section') === sectionKey);
+          const isTarget = (s.getAttribute('data-section') === sectionKey);
+          s.classList.toggle('active', isTarget);
         });
 
-        // marca nav ativo
         navItems.forEach(a => {
           const navKey = a.getAttribute('data-nav');
           a.classList.toggle('active', navKey === sectionKey);
         });
+
+        // Fecha o menu mobile após navegar
+        if (sidebar) sidebar.classList.remove('open');
+
+        // Notifica o app.js para atualizar dados da seção
+        document.dispatchEvent(new CustomEvent('section:change', { detail: { section: sectionKey } }));
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
 
       navItems.forEach(a => {
@@ -2045,13 +2978,15 @@
         });
       });
 
-      // inicial
+      // Expõe para o app.js (links internos como "Ver alunos em atraso")
+      window.__activateSection = activate;
+
+      // Inicializa no Dashboard
       activate('dashboard');
     })();
   </script>
 
-  <script type="module" src="./assets/js/app.js"></script>
-
+  <script type="module" src="./assets/js/app.js?v=3"></script>
 
 </body>
 </html>

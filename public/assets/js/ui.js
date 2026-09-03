@@ -41,15 +41,15 @@ export function escapeHtmlAttr(str) {
 export function openModal(id) {
   const el = typeof id === 'string' ? $(id) : id;
   if (!el) return;
-  el.classList.add('show');
+  el.classList.add('show', 'active');
   document.body.style.overflow = 'hidden';
 }
 
 export function closeModal(id) {
   const el = typeof id === 'string' ? $(id) : id;
   if (!el) return;
-  el.classList.remove('show');
-  if (!document.querySelector('.modal-backdrop.show')) {
+  el.classList.remove('show', 'active');
+  if (!document.querySelector('.modal-backdrop.show, .modal-backdrop.active')) {
     document.body.style.overflow = '';
   }
 }

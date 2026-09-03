@@ -6,7 +6,8 @@ export const LS_KEYS = {
   emprestimos: 'biblioteca_emprestimos_v1',
   feedback: 'biblioteca_feedback_v1',
   relatorios: 'biblioteca_relatorios_v1',
-  prateleira: 'biblioteca_prateleira_v1'
+  prateleira: 'biblioteca_prateleira_v1',
+  theme: 'biblioteca_tema_custom_v1'
 };
 
 export function load(key, fallback) {
