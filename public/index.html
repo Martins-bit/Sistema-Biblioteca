@@ -2984,7 +2984,10 @@
       try {
         const res = await fetch('/api/auth/session', { credentials: 'include' });
         if (!res.ok) {
-          window.location.href = './login.html';
+          // Sessão do servidor inválida: limpa o estado local para não entrar
+          // em loop login <-> index e volta para o login.
+          try { localStorage.removeItem('biblioteca_auth_v1'); } catch (_) {}
+          window.location.replace('./login.html?sessao=expirada');
         }
       } catch (e) {
         // Servidor inacessível: deixa seguir (modo arquivo/local)

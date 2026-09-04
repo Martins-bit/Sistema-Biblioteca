@@ -275,10 +275,27 @@
       if (erro && mapa[erro]) setMsg(mapa[erro], 'error');
     })();
 
-    // Redireciona se já estiver autenticado
-    if(isAuth()){
-      location.href = './index.html';
-    }
+    // Mensagem de sessão expirada vinda do index.html (?sessao=expirada)
+    (function(){
+      const p = new URLSearchParams(location.search);
+      if (p.get('sessao') === 'expirada') {
+        setMsg('Sua sessão expirou. Faça login novamente.', 'error');
+        try { localStorage.removeItem(LS_AUTH_KEY); } catch (_) {}
+      }
+    })();
+
+    // Se já existe uma sessão válida NO SERVIDOR, vai direto para o site.
+    // (O localStorage NÃO é fonte de verdade, para evitar loop de redirecionamento)
+    (async function(){
+      try {
+        const res = await fetch('/api/auth/session', { credentials: 'include' });
+        if (res.ok) {
+          location.replace('./index.html');
+        } else {
+          try { localStorage.removeItem(LS_AUTH_KEY); } catch (_) {}
+        }
+      } catch (e) { /* servidor indisponível */ }
+    })();
 
     // Mostrar / ocultar senha
     $('#toggleSenha').addEventListener('click', () => {
@@ -305,11 +322,14 @@
       window.location.href = '/api/auth/google';
     });
 
-    async function tryAuthRequest(url, identificador, password) {
+    // Login sempre na mesma origem em que a página foi aberta.
+    // (Nada de tentar outras portas: o cookie de sessão ficaria gravado em
+    // outra porta e o index.html derrubaria a sessão, causando loop de redirecionamento)
+    async function tryAuthRequest(identificador, password) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
       try {
-        const res = await fetch(url, {
+        const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email: identificador, password }),
@@ -332,37 +352,29 @@
       setMsg('');
 
       try {
-        let response = null;
-        if (location.protocol !== 'file:') {
-          response = await tryAuthRequest('/api/auth/login', identificador, password);
+        if (location.protocol === 'file:') {
+          setMsg('Abra o site pelo servidor (http://localhost:3000). Não funciona abrindo o arquivo direto.', 'error');
+          return;
         }
 
-        if (!response || response.status === 404 || response.status === 426) {
-          const possiblePorts = [3000, 3001, 8080, 5000];
-          for (const port of possiblePorts) {
-            if (location.port !== String(port)) {
-              response = await tryAuthRequest(`http://localhost:${port}/api/auth/login`, identificador, password);
-              if (response && response.status !== 404 && response.status !== 426) break;
-            }
-          }
+        const response = await tryAuthRequest(identificador, password);
+
+        if (!response) {
+          setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
+          return;
         }
 
-        if (response) {
-          let data = null;
-          try { data = await response.json(); } catch(err) { data = null; }
+        let data = null;
+        try { data = await response.json(); } catch(err) { data = null; }
 
-          if (response.ok && data && data.ok) {
-            setMsg('Login realizado com sucesso! Redirecionando...', 'success');
-            setAuth(data.user);
-            location.href = './index.html?_=' + Date.now();
-            return;
-          } else if (response.status === 400 || response.status === 401 || (data && data.error)) {
-            setMsg(data?.error || 'Usuário ou senha inválidos.', 'error');
-            return;
-          }
+        if (response.ok && data && data.ok) {
+          setMsg('Login realizado com sucesso! Redirecionando...', 'success');
+          setAuth(data.user);
+          location.replace('./index.html');
+          return;
         }
 
-        setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
+        setMsg((data && data.error) || 'Usuário ou senha inválidos.', 'error');
       } catch (err) {
         setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
       } finally {

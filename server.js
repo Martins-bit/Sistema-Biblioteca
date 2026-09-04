@@ -20,8 +20,22 @@ const estatisticasRoutes = require('./routes/estatisticas');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Secret da sessão: SEMPRE via variável de ambiente em produção.
-const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-only-' + require('crypto').randomBytes(32).toString('hex');
+// Secret da sessão: via variável de ambiente em produção.
+// Em dev, usamos um secret PERSISTENTE em arquivo: se ele mudar a cada
+// reinício, todos os cookies de sessão ficam inválidos e o usuário cai
+// em loop de redirecionamento entre login e index.
+let SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  const fs = require('fs');
+  const secretFile = path.join(__dirname, '.session-secret');
+  try {
+    SESSION_SECRET = fs.readFileSync(secretFile, 'utf8').trim();
+  } catch (_) {}
+  if (!SESSION_SECRET) {
+    SESSION_SECRET = require('crypto').randomBytes(32).toString('hex');
+    try { fs.writeFileSync(secretFile, SESSION_SECRET); } catch (_) {}
+  }
+}
 
 // Origens permitidas (desenvolvimento). Em produção, defina ALLOWED_ORIGINS.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001').split(',');
@@ -84,17 +98,10 @@ app.use(express.static(path.join(__dirname, 'public'), {
   }
 }));
 
+// IMPORTANTE: ouvir em APENAS UMA porta.
+// Duas portas = dois servidores independentes com memórias de sessão
+// diferentes => o login "não cola" e a página fica alternando
+// entre login.html e index.html em loop.
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📚 Sistema da Biblioteca rodando em http://localhost:${PORT}\n`);
 });
-
-// Suporte adicional para a porta 3001 caso tente acessar por ela
-try {
-  const altPort = (PORT === 3000) ? 3001 : 3000;
-  const altServer = app.listen(altPort, '0.0.0.0', () => {
-    console.log(`📚 Acesso secundário disponível em http://localhost:${altPort}\n`);
-  });
-  altServer.on('error', () => {
-    // Ignora silenciosamente se a porta já estiver em uso
-  });
-} catch (e) {}

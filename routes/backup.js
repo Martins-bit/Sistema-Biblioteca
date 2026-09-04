@@ -114,6 +114,8 @@ router.delete('/', (req, res) => {
     const conn = db();
     const tx = conn.transaction(() => {
       conn.prepare('DELETE FROM emprestimos').run();
+      conn.prepare('DELETE FROM bloqueios').run();
+      conn.prepare('DELETE FROM historico_avaliacao').run();
       conn.prepare('DELETE FROM alunos').run();
       conn.prepare('DELETE FROM livros').run();
       conn.prepare('DELETE FROM relatorios').run();

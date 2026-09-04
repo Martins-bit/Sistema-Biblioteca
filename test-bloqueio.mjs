@@ -76,15 +76,16 @@ function assert(nome, cond, extra = '') {
   assert('Aluno com 3,0 exato PODE emprestar', r.status === 201);
   await devolver(r.data.id, 0, 'Bom');
 
-  // QA DoisNove: 4 atrasos grandes (5 - 2 = 3,0) + 1 atraso de 4 dias (-0,33) => 2,7
+  // QA DoisNove: 4 atrasos grandes (5 - 2 = 3,0) + 2 atrasos de 4 dias (-0,33 cada) => ~2,3
+  // Obs.: devolver(id, X) usa hoje+X; como o limite é hoje+7, "4 dias de atraso" = devolver em hoje+11
   for (let i = 0; i < 4; i++) {
     const e = await tentarEmprestimo(alunos['QA DoisNove'], l1);
     await devolver(e.data.id, 30, 'Bom');
   }
   let e2 = await tentarEmprestimo(alunos['QA DoisNove'], l1);
-  await devolver(e2.data.id, 4, 'Bom');
+  await devolver(e2.data.id, 11, 'Bom');
   let e3 = await tentarEmprestimo(alunos['QA DoisNove'], l1);
-  await devolver(e3.data.id, 4, 'Bom');
+  await devolver(e3.data.id, 11, 'Bom');
   n = await nota(alunos['QA DoisNove']);
   assert('QA DoisNove abaixo de 3,0', n.nota < 3, `nota=${n.nota}`);
 
