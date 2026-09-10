@@ -524,17 +524,19 @@ function exportarAlunos() {
 function parseDedTexto(texto, turmaPadrao) {
   const resultados = [];
   const linhas = String(texto || '').split(/\r?\n/);
+  const turmas = /^(?:\d{1,2}\s*(?:°|º|o)?\s*[A-Da-d])$/;
 
   for (let linha of linhas) {
     linha = linha.trim();
     if (!linha) continue;
 
-    // CSV com ; ou tab
     let partes = linha.includes(';') ? linha.split(';') : (linha.includes('\t') ? linha.split('\t') : null);
     if (partes && partes.length >= 2) {
-      const nome = partes[0].trim();
-      const turma = (partes[1] || turmaPadrao || '').trim();
-      if (nome && nome.length > 2 && !/^\d+$/.test(nome)) {
+      partes = partes.map(parte => parte.trim().replace(/^"|"$/g, ''));
+      if (/nome|aluno|matr[íi]cula|turma/i.test(linha) && /nome|aluno/i.test(linha)) continue;
+      const turma = partes.find(parte => turmas.test(parte.replace(/\s*ANO\s*/i, ' '))) || turmaPadrao || '';
+      const nome = partes.find(parte => /[a-zA-ZÀ-ÿ]/.test(parte) && !turmas.test(parte) && !/^(matr[íi]cula|aluno|nome)$/i.test(parte) && !/^\d+$/.test(parte));
+      if (nome && nome.length > 2) {
         resultados.push({ nome, turma });
         continue;
       }
@@ -543,10 +545,10 @@ function parseDedTexto(texto, turmaPadrao) {
     // Formato colunar: "1  1234567  Maria Silva Santos  7ºA"
     const colunas = linha.split(/\s{2,}|\t+/).map(s => s.trim()).filter(Boolean);
     if (colunas.length >= 2) {
-      const turmaCand = colunas[colunas.length - 1];
-      const pareceTurma = /^\d{1,2}\s*[°º]?\s*[A-Da-d]?$/.test(turmaCand.replace(/\s*ANO\s*/i, ' '));
+      const turmaCand = colunas.find(coluna => turmas.test(coluna.replace(/\s*ANO\s*/i, ' ')));
+      const pareceTurma = !!turmaCand;
       if (pareceTurma) {
-        const nome = colunas.slice(0, -1).filter(c => !/^\d+$/.test(c)).join(' ');
+        const nome = colunas.filter(c => c !== turmaCand && !/^\d+$/.test(c) && !/^(matr[íi]cula|aluno|nome)$/i.test(c)).join(' ');
         if (nome && nome.length > 2) {
           resultados.push({ nome, turma: turmaCand });
           continue;
@@ -678,13 +680,43 @@ function renderLivros() {
   }
 }
 
+function formatarLocalizacao(livroOuLetra, numero) {
+  const letra = String(livroOuLetra || '').trim().toUpperCase();
+  const valorNumero = Number.parseInt(numero, 10);
+
+  if (letra && Number.isInteger(valorNumero)) {
+    return `${letra}-${String(valorNumero).padStart(2, '0')}`;
+  }
+
+  if (letra) {
+    return letra;
+  }
+
+  return '';
+}
+
+function dadosMetadataLivro(l) {
+  const metadados = [];
+  if (l.genero) metadados.push(`Gênero: ${escapeHtml(l.genero)}`);
+  if (l.classificacao) metadados.push(`Classificação: ${escapeHtml(l.classificacao)}`);
+
+  const localizacao = formatarLocalizacao(l.localizacaoLetra, l.localizacaoNumero);
+  if (localizacao) metadados.push(`Localização: ${escapeHtml(localizacao)}`);
+
+  if (!metadados.length) return '';
+  return `<div style="margin-top:4px; font-size:11px; color:var(--muted); line-height:1.4;">${metadados.map(item => `<div>${item}</div>`).join('')}</div>`;
+}
+
 function linhaLivro(l) {
   const disp = disponiveisLivro(l.id);
   return `<tr>
     <td>${capaThumbHTML(l)}</td>
     <td>${escapeHtml(l.titulo)}</td>
     <td>${escapeHtml(l.autor)}</td>
-    <td><span class="pill">${escapeHtml(l.categoria)}</span></td>
+    <td>
+      <span class="pill">${escapeHtml(l.categoria)}</span>
+      ${dadosMetadataLivro(l)}
+    </td>
     <td>${l.acervo}</td>
     <td><strong style="color: ${disp > 0 ? '#15803d' : 'var(--danger)'};">${disp}</strong></td>
     <td class="table-actions">
@@ -704,16 +736,58 @@ async function cadastrarLivro(e) {
   const categoria = $('#livroCategoria').value;
   const acervo = parseInt($('#livroAcervo').value, 10) || 1;
   const capaUrl = $('#livroCapa').value.trim();
+  const isbn = $('#livroIsbn').value.trim();
+  const genero = $('#livroGenero').value.trim();
+  const classificacao = $('#livroClassificacao').value;
+  const localizacao = $('#livroLocalizacao').value.trim();
+  const localizacaoInfo = (() => {
+    const texto = String(localizacao || '').trim();
+    if (!texto) return { localizacaoLetra: null, localizacaoNumero: null };
+
+    const match = texto.match(/^([A-Za-z]+)\s*[-/ ]\s*(\d+)$/);
+    if (match) {
+      return {
+        localizacaoLetra: match[1].toUpperCase(),
+        localizacaoNumero: Math.max(1, parseInt(match[2], 10) || 1)
+      };
+    }
+
+    const fallback = texto.match(/^([A-Za-z]+)\s*(\d+)$/);
+    if (fallback) {
+      return {
+        localizacaoLetra: fallback[1].toUpperCase(),
+        localizacaoNumero: Math.max(1, parseInt(fallback[2], 10) || 1)
+      };
+    }
+
+    return { localizacaoLetra: null, localizacaoNumero: null };
+  })();
 
   if (!titulo || !autor || !categoria) { toast('Preencha título, autor e categoria.', 'erro'); return; }
 
   try {
-    await api('/api/livros', { method: 'POST', body: { titulo, autor, categoria, acervo, capaUrl: capaUrl || null } });
+    await api('/api/livros', { method: 'POST', body: {
+      titulo,
+      autor,
+      categoria,
+      acervo,
+      capaUrl: capaUrl || null,
+      isbn: isbn || null,
+      classificacao: classificacao || null,
+      genero: genero || null,
+      localizacaoLetra: localizacaoInfo.localizacaoLetra,
+      localizacaoNumero: localizacaoInfo.localizacaoNumero
+    } });
+
     $('#livroTitulo').value = '';
     $('#livroAutor').value = '';
     $('#livroCategoria').value = '';
+    $('#livroGenero').value = '';
+    $('#livroClassificacao').value = '';
+    $('#livroLocalizacao').value = '';
     $('#livroAcervo').value = '1';
     $('#livroCapa').value = '';
+    $('#livroIsbn').value = '';
     atualizarPreviewCapa();
     toast(`Livro "${titulo}" cadastrado com sucesso!`);
     await recarregarTudo();
@@ -741,6 +815,9 @@ function abrirEditarLivro(id) {
   $('#editarLivroTitulo').value = livro.titulo;
   $('#editarLivroAutor').value = livro.autor;
   $('#editarLivroCategoria').value = livro.categoria;
+  $('#editarLivroGenero').value = livro.genero || '';
+  $('#editarLivroClassificacao').value = livro.classificacao || '';
+  $('#editarLivroLocalizacao').value = formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero);
   $('#editarLivroAcervo').value = livro.acervo;
   $('#editarLivroCapa').value = livro.capaUrl || '';
   abrirModal('#modalEditarLivro');
@@ -752,11 +829,46 @@ async function salvarEdicaoLivro() {
   const categoria = $('#editarLivroCategoria').value;
   const acervo = parseInt($('#editarLivroAcervo').value, 10) || 1;
   const capaUrl = $('#editarLivroCapa').value.trim();
+  const genero = $('#editarLivroGenero').value.trim();
+  const classificacao = $('#editarLivroClassificacao').value;
+  const localizacao = $('#editarLivroLocalizacao').value.trim();
+  const localizacaoInfo = (() => {
+    const texto = String(localizacao || '').trim();
+    if (!texto) return { localizacaoLetra: null, localizacaoNumero: null };
+
+    const match = texto.match(/^([A-Za-z]+)\s*[-/ ]\s*(\d+)$/);
+    if (match) {
+      return {
+        localizacaoLetra: match[1].toUpperCase(),
+        localizacaoNumero: Math.max(1, parseInt(match[2], 10) || 1)
+      };
+    }
+
+    const fallback = texto.match(/^([A-Za-z]+)\s*(\d+)$/);
+    if (fallback) {
+      return {
+        localizacaoLetra: fallback[1].toUpperCase(),
+        localizacaoNumero: Math.max(1, parseInt(fallback[2], 10) || 1)
+      };
+    }
+
+    return { localizacaoLetra: null, localizacaoNumero: null };
+  })();
 
   if (!titulo || !autor || !categoria) { toast('Preencha título, autor e categoria.', 'erro'); return; }
 
   try {
-    await api(`/api/livros/${state.editandoLivroId}`, { method: 'PUT', body: { titulo, autor, categoria, acervo, capaUrl: capaUrl || null } });
+    await api(`/api/livros/${state.editandoLivroId}`, { method: 'PUT', body: {
+      titulo,
+      autor,
+      categoria,
+      acervo,
+      capaUrl: capaUrl || null,
+      genero: genero || null,
+      classificacao: classificacao || null,
+      localizacaoLetra: localizacaoInfo.localizacaoLetra,
+      localizacaoNumero: localizacaoInfo.localizacaoNumero
+    } });
     fecharModal('#modalEditarLivro');
     toast('Livro atualizado com sucesso!');
     await recarregarTudo();
@@ -867,7 +979,44 @@ function mostrarFeedbackScanner(msg, tipo) {
 }
 
 async function processarCodigoLido(codigo) {
-  const isbn = String(codigo).replace(/[^0-9Xx]/g, '');
+  const valor = String(codigo || '').trim();
+  const qr = valor.match(/^LIVRO\s*:\s*(\d+)\s*:/i);
+  if (qr) {
+    const livroQr = state.livros.find(l => Number(l.id) === Number(qr[1]));
+    if (livroQr) {
+      if (state.scannerContexto === 'emprestimo') {
+        const sel = $('#emprestimoLivro');
+        sel.value = String(livroQr.id);
+        if (sel.__combobox) sel.__combobox.sync();
+      } else {
+        $('#livroTitulo').value = livroQr.titulo;
+        $('#livroAutor').value = livroQr.autor;
+        $('#livroCategoria').value = livroQr.categoria;
+        $('#livroGenero').value = livroQr.genero || '';
+        $('#livroClassificacao').value = livroQr.classificacao || '';
+        $('#livroLocalizacao').value = formatarLocalizacao(livroQr.localizacaoLetra, livroQr.localizacaoNumero);
+        $('#livroAcervo').value = livroQr.acervo || 1;
+        $('#livroIsbn').value = livroQr.isbn || '';
+        if (livroQr.capaUrl) $('#livroCapa').value = livroQr.capaUrl;
+        atualizarPreviewCapa();
+      }
+      await fecharScanner();
+      toast(state.scannerContexto === 'emprestimo'
+        ? `Livro "${livroQr.titulo}" selecionado!`
+        : `Dados do livro "${livroQr.titulo}" preenchidos!`);
+      return;
+    }
+  }
+  const isbn = valor.replace(/[^0-9Xx]/g, '').toUpperCase();
+  const livroLocal = state.livros.find(l => l.isbn && String(l.isbn).replace(/[^0-9Xx]/g, '').toUpperCase() === isbn);
+  if (livroLocal && state.scannerContexto === 'emprestimo') {
+    const sel = $('#emprestimoLivro');
+    sel.value = String(livroLocal.id);
+    if (sel.__combobox) sel.__combobox.sync();
+    await fecharScanner();
+    toast(`Livro "${livroLocal.titulo}" selecionado!`);
+    return;
+  }
   if (state.scannerContexto === 'emprestimo') {
     // Localiza livro pelo título contendo o código ou abre busca
     const livro = state.livros.find(l => l.titulo.toLowerCase().includes(codigo.toLowerCase()));
@@ -894,11 +1043,24 @@ async function processarCodigoLido(codigo) {
 async function buscarIsbnEPreencher(isbn, selecionarEmprestimo) {
   mostrarFeedbackScanner(`Buscando ISBN ${isbn} nas bases públicas...`, 'ok');
   try {
-    const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
-    if (!res.ok) throw new Error('não encontrado');
-    const dados = await res.json();
+    let dados = null;
+    for (const fonte of [`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`, `https://openlibrary.org/isbn/${isbn}.json`]) {
+      try {
+        const resposta = await fetch(fonte);
+        if (!resposta.ok) continue;
+        const recebido = await resposta.json();
+        if (recebido.items?.[0]?.volumeInfo) {
+          const info = recebido.items[0].volumeInfo;
+          dados = { title: info.title, authors: (info.authors || []).map(name => ({ name })), cover: info.imageLinks?.thumbnail };
+        } else if (recebido.title) {
+          dados = recebido;
+        }
+        if (dados?.title) break;
+      } catch (e) {}
+    }
+    if (!dados) throw new Error('não encontrado');
     const titulo = dados.title || '';
-    let autor = '';
+    let autor = dados.authors?.[0]?.name || '';
     if (dados.authors && dados.authors.length) {
       try {
         const resAutor = await fetch(`https://openlibrary.org${dados.authors[0].key}.json`);
@@ -922,6 +1084,9 @@ async function buscarIsbnEPreencher(isbn, selecionarEmprestimo) {
 
     $('#livroTitulo').value = titulo;
     if (autor) $('#livroAutor').value = autor;
+    $('#livroIsbn').value = isbn;
+    if (dados.cover) $('#livroCapa').value = dados.cover.replace('http://', 'https://');
+    atualizarPreviewCapa();
     await fecharScanner();
     toast(`Dados do ISBN preenchidos! Verifique e cadastre o livro.`);
   } catch (e) {
@@ -1106,6 +1271,9 @@ function abrirDetalhesLivro(id) {
       <div style="flex:1; display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:750;">
         <div><strong>Autor:</strong> ${escapeHtml(livro.autor)}</div>
         <div><strong>Categoria:</strong> ${escapeHtml(livro.categoria)}</div>
+        <div><strong>Gênero:</strong> ${escapeHtml(livro.genero || '—')}</div>
+        <div><strong>Classificação:</strong> ${escapeHtml(livro.classificacao || '—')}</div>
+        <div><strong>Localização:</strong> ${escapeHtml(formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero) || '—')}</div>
         <div><strong>Exemplares:</strong> ${livro.acervo}</div>
         <div><strong>Disponíveis:</strong> ${disp}</div>
         <div><strong>Total de empréstimos:</strong> ${totalEmp}</div>

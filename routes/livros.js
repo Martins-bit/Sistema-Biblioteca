@@ -19,6 +19,11 @@ function capaValida(capaUrl) {
   );
 }
 
+function isbnNormalizado(isbn) {
+  const valor = String(isbn || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+  return valor.length === 10 || valor.length === 13 ? valor : null;
+}
+
 // GET /api/livros - Listar todos os livros
 router.get('/', (req, res) => {
   try {
@@ -46,7 +51,8 @@ router.get('/:id', (req, res) => {
 
 // POST /api/livros - Criar novo livro
 router.post('/', (req, res) => {
-  const { titulo, autor, categoria, acervo, capaUrl } = req.body;
+  const { titulo, autor, categoria, acervo, capaUrl, isbn, classificacao, genero, localizacaoLetra, localizacaoNumero } = req.body;
+  const isbnLimpo = isbnNormalizado(isbn);
 
   if (!titulo || !autor || !categoria) {
     return res.status(400).json({ error: 'Título, autor e categoria são obrigatórios' });
@@ -55,15 +61,25 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'URL da capa inválida' });
   }
 
+  const localizacaoLetraValida = localizacaoLetra ? String(localizacaoLetra).trim().toUpperCase() : null;
+  const localizacaoNumeroValido = localizacaoNumero === undefined || localizacaoNumero === null || localizacaoNumero === ''
+    ? null
+    : Math.max(1, parseInt(localizacaoNumero, 10) || 1);
+
   try {
     const result = db().prepare(
-      'INSERT INTO livros (titulo, autor, categoria, acervo, capaUrl) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO livros (titulo, autor, categoria, acervo, capaUrl, isbn, classificacao, genero, localizacaoLetra, localizacaoNumero) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(
       String(titulo).trim(),
       String(autor).trim(),
       String(categoria).trim(),
       Math.max(1, parseInt(acervo, 10) || 1),
-      capaUrl ? String(capaUrl).trim() : null
+      capaUrl ? String(capaUrl).trim() : null,
+      isbnLimpo,
+      classificacao ? String(classificacao).trim() : null,
+      genero ? String(genero).trim() : null,
+      localizacaoLetraValida,
+      localizacaoNumeroValido
     );
 
     const novoLivro = db().prepare('SELECT * FROM livros WHERE id = ?').get(result.lastInsertRowid);
@@ -77,7 +93,8 @@ router.post('/', (req, res) => {
 // PUT /api/livros/:id - Atualizar livro
 router.put('/:id', (req, res) => {
   const { id } = req.params;
-  const { titulo, autor, categoria, acervo, capaUrl } = req.body;
+  const { titulo, autor, categoria, acervo, capaUrl, isbn, classificacao, genero, localizacaoLetra, localizacaoNumero } = req.body;
+  const isbnLimpo = isbnNormalizado(isbn);
 
   if (!titulo || !autor || !categoria) {
     return res.status(400).json({ error: 'Título, autor e categoria são obrigatórios' });
@@ -85,6 +102,11 @@ router.put('/:id', (req, res) => {
   if (!capaValida(capaUrl)) {
     return res.status(400).json({ error: 'URL da capa inválida' });
   }
+
+  const localizacaoLetraValida = localizacaoLetra ? String(localizacaoLetra).trim().toUpperCase() : null;
+  const localizacaoNumeroValido = localizacaoNumero === undefined || localizacaoNumero === null || localizacaoNumero === ''
+    ? null
+    : Math.max(1, parseInt(localizacaoNumero, 10) || 1);
 
   try {
     const conn = db();
@@ -95,13 +117,18 @@ router.put('/:id', (req, res) => {
     }
 
     conn.prepare(
-      'UPDATE livros SET titulo = ?, autor = ?, categoria = ?, acervo = ?, capaUrl = ? WHERE id = ?'
+      'UPDATE livros SET titulo = ?, autor = ?, categoria = ?, acervo = ?, capaUrl = ?, isbn = ?, classificacao = ?, genero = ?, localizacaoLetra = ?, localizacaoNumero = ? WHERE id = ?'
     ).run(
       String(titulo).trim(),
       String(autor).trim(),
       String(categoria).trim(),
       Math.max(1, parseInt(acervo, 10) || 1),
       capaUrl ? String(capaUrl).trim() : null,
+      isbnLimpo,
+      classificacao ? String(classificacao).trim() : null,
+      genero ? String(genero).trim() : null,
+      localizacaoLetraValida,
+      localizacaoNumeroValido,
       id
     );
 

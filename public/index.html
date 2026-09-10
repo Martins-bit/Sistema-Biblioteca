@@ -2012,22 +2012,45 @@
               </div>
             </div>
 
-            <div class="row three">
+            <div>
+              <label for="livroIsbn">ISBN (opcional)</label>
+              <input id="livroIsbn" inputmode="numeric" placeholder="Ex.: 9788535902778" maxlength="17" />
+            </div>
+
+            <div class="row four">
               <div>
                 <label for="livroCategoria">Categoria</label>
                 <select id="livroCategoria" required>
                   <option value="">Selecione...</option>
-                  <option>Romance</option>
-                  <option>Comédia</option>
-                  <option>Fantasia</option>
-                  <option>Aventura</option>
-                  <option>Suspense</option>
-                  <option>Ficção Científica</option>
-                  <option>Biografia</option>
+                  <option>Literatura</option>
                   <option>História</option>
+                  <option>Ciências</option>
+                  <option>Geografia</option>
+                  <option>Biografia</option>
+                  <option>Arte</option>
                   <option>Outro</option>
                 </select>
               </div>
+              <div>
+                <label for="livroGenero">Gênero</label>
+                <input id="livroGenero" placeholder="Ex.: Romance, História / Não ficção" maxlength="80" />
+              </div>
+              <div>
+                <label for="livroClassificacao">Classificação / Nível de Ensino</label>
+                <select id="livroClassificacao">
+                  <option value="">Selecione...</option>
+                  <option>Ensino Fundamental</option>
+                  <option>Ensino Médio</option>
+                  <option>Fundamental e Médio</option>
+                </select>
+              </div>
+              <div>
+                <label for="livroLocalizacao">Localização física</label>
+                <input id="livroLocalizacao" placeholder="Ex.: A-01" maxlength="12" />
+              </div>
+            </div>
+
+            <div class="row two">
               <div>
                 <label for="livroAcervo">Quantidade (exemplares)</label>
                 <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
@@ -2732,22 +2755,39 @@
               <input id="editarLivroAutor" required maxlength="120" />
             </div>
           </div>
-          <div class="row three">
+          <div class="row four">
             <div>
               <label for="editarLivroCategoria">Categoria</label>
               <select id="editarLivroCategoria" required>
                 <option value="">Selecione...</option>
-                <option>Romance</option>
-                <option>Comédia</option>
-                <option>Fantasia</option>
-                <option>Aventura</option>
-                <option>Suspense</option>
-                <option>Ficção Científica</option>
-                <option>Biografia</option>
+                <option>Literatura</option>
                 <option>História</option>
+                <option>Ciências</option>
+                <option>Geografia</option>
+                <option>Biografia</option>
+                <option>Arte</option>
                 <option>Outro</option>
               </select>
             </div>
+            <div>
+              <label for="editarLivroGenero">Gênero</label>
+              <input id="editarLivroGenero" placeholder="Ex.: Romance, História / Não ficção" maxlength="80" />
+            </div>
+            <div>
+              <label for="editarLivroClassificacao">Classificação / Nível de Ensino</label>
+              <select id="editarLivroClassificacao">
+                <option value="">Selecione...</option>
+                <option>Ensino Fundamental</option>
+                <option>Ensino Médio</option>
+                <option>Fundamental e Médio</option>
+              </select>
+            </div>
+            <div>
+              <label for="editarLivroLocalizacao">Localização física</label>
+              <input id="editarLivroLocalizacao" placeholder="Ex.: A-01" maxlength="12" />
+            </div>
+          </div>
+          <div class="row two">
             <div>
               <label for="editarLivroAcervo">Exemplares</label>
               <input id="editarLivroAcervo" type="number" min="1" step="1" required />

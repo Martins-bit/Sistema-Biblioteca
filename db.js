@@ -88,6 +88,24 @@ try {
     db.exec("ALTER TABLE livros ADD COLUMN capaUrl TEXT");
   } catch (e) { /* Coluna já existe */ }
 
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN isbn TEXT");
+  } catch (e) { /* Coluna já existe */ }
+
+  // ---- Migration: classificação, gênero e localização física do livro ----
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN classificacao TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN genero TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN localizacaoLetra TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE livros ADD COLUMN localizacaoNumero INTEGER");
+  } catch (e) { /* Coluna já existe */ }
+
   // ---- Migration: e-mail do usuário (login por e-mail) ----
   try {
     db.exec("ALTER TABLE users ADD COLUMN email TEXT");

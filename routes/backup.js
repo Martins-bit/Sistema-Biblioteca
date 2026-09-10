@@ -37,7 +37,9 @@ router.post('/', (req, res) => {
     const mapaLivros = new Map();
 
     const inserirAluno = conn.prepare('INSERT INTO alunos (nome, turma) VALUES (?, ?)');
-    const inserirLivro = conn.prepare('INSERT INTO livros (titulo, autor, categoria, acervo, capaUrl) VALUES (?, ?, ?, ?, ?)');
+    const inserirLivro = conn.prepare(
+      'INSERT INTO livros (titulo, autor, categoria, acervo, capaUrl, isbn, classificacao, genero, localizacaoLetra, localizacaoNumero) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
     const inserirEmprestimo = conn.prepare(`
       INSERT INTO emprestimos (alunoId, livroId, dataRetirada, dataLimite, devolvido, dataDevolucao,
                                estadoSaida, obsSaida, estadoDevolucao, obsDevolucao)
@@ -64,7 +66,18 @@ router.post('/', (req, res) => {
       (Array.isArray(livros) ? livros : []).forEach(l => {
         if (!l || !l.titulo || !l.autor || !l.categoria) return;
         if (contarLivros.get(l.titulo, l.autor).c > 0) { ignorados.livros++; return; }
-        const r = inserirLivro.run(l.titulo, l.autor, l.categoria, l.acervo || 1, l.capaUrl || null);
+        const r = inserirLivro.run(
+          l.titulo,
+          l.autor,
+          l.categoria,
+          l.acervo || 1,
+          l.capaUrl || null,
+          l.isbn || null,
+          l.classificacao || null,
+          l.genero || null,
+          l.localizacaoLetra || null,
+          l.localizacaoNumero ?? null
+        );
         mapaLivros.set(l.id, Number(r.lastInsertRowid));
         inseridos.livros++;
       });
