@@ -921,15 +921,15 @@
     /* ===== Estante (cards com capa) ===== */
     .estante-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 18px;
     }
     .estante-card {
-      background: #ffffff;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
       border: 1px solid var(--border);
-      border-radius: 16px;
+      border-radius: 18px;
       overflow: hidden;
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
       transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
       display: flex;
       flex-direction: column;
@@ -941,13 +941,14 @@
       border-color: rgba(34, 197, 94, 0.35);
     }
     .estante-cover {
-      height: 190px;
+      height: 210px;
       background: linear-gradient(135deg, #e2e8f0, #f8fafc);
       display: flex;
       align-items: center;
       justify-content: center;
       position: relative;
       overflow: hidden;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.3);
     }
     .estante-cover img {
       width: 100%;
@@ -1000,7 +1001,10 @@
       justify-content: space-between;
       gap: 6px;
     }
-    .estante-categoria {
+    .estante-tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       font-size: 10px;
       font-weight: 900;
       color: #065f46;
@@ -1011,7 +1015,46 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 60%;
+      max-width: 100%;
+    }
+    .estante-tag-alt {
+      color: #1d4ed8;
+      background: rgba(59, 130, 246, 0.10);
+      border-color: rgba(59, 130, 246, 0.25);
+    }
+    .estante-tag-muted {
+      color: #475569;
+      background: rgba(148, 163, 184, 0.12);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+    .estante-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .estante-meta-row-compact {
+      margin-top: 2px;
+    }
+    .estante-location {
+      margin-top: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(59,130,246,0.08);
+      color: #1d4ed8;
+      border: 1px solid rgba(59,130,246,0.2);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 900;
+      width: fit-content;
+    }
+    .estante-location-icon { font-size: 12px; }
+    .estante-availability {
+      font-size: 11px;
+      font-weight: 900;
+      color: #15803d;
     }
 
     /* ===== Situação do aluno (bloqueio por avaliação) ===== */
@@ -1251,6 +1294,45 @@
       border-radius: 10px;
       padding: 3px;
       border: 1px solid var(--border);
+    }
+    .shelf-toolbar {
+      display: flex;
+      gap: 16px;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .shelf-filters {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+    }
+    /* Busca ocupa mais largura (2 colunas) */
+    .shelf-filters .shelf-filter-busca {
+      grid-column: span 2;
+    }
+    @media (max-width: 1180px) {
+      .shelf-filters { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+      .shelf-filters .shelf-filter-busca { grid-column: span 3; }
+    }
+    @media (max-width: 720px) {
+      .shelf-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .shelf-filters .shelf-filter-busca { grid-column: 1 / -1; }
+    }
+    .shelf-filters > div {
+      min-width: 0;
+    }
+    .shelf-filters input,
+    .shelf-filters select {
+      width: 100%;
+    }
+    .estante-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
     }
 
     .shelf-view-btn {
@@ -2020,16 +2102,7 @@
             <div class="row four">
               <div>
                 <label for="livroCategoria">Categoria</label>
-                <select id="livroCategoria" required>
-                  <option value="">Selecione...</option>
-                  <option>Literatura</option>
-                  <option>História</option>
-                  <option>Ciências</option>
-                  <option>Geografia</option>
-                  <option>Biografia</option>
-                  <option>Arte</option>
-                  <option>Outro</option>
-                </select>
+                <input id="livroCategoria" placeholder="Ex.: Literatura, História, Ciências..." maxlength="80" required />
               </div>
               <div>
                 <label for="livroGenero">Gênero</label>
@@ -2117,36 +2190,63 @@
         <div class="card-body">
           <div class="shelf-toolbar">
             <div class="shelf-filters">
-              <div style="min-width: 170px;">
+              <div>
                 <label style="margin-bottom: 4px;">Agrupar por:</label>
                 <select id="shelfGroupBy" style="height: 38px; font-size: 13px;">
                   <option value="categoria">📂 Gênero / Categoria</option>
                   <option value="autor">✍️ Autor</option>
+                  <option value="estante">📍 Agrupar por Estante</option>
                   <option value="disponibilidade">🟢 Disponibilidade</option>
                   <option value="nenhum">🏢 Estante Única</option>
                 </select>
               </div>
 
-              <div style="min-width: 170px;">
+              <div>
                 <label style="margin-bottom: 4px;">Ordenar por:</label>
                 <select id="shelfSortBy" style="height: 38px; font-size: 13px;">
                   <option value="titulo-asc">🔤 Título (A - Z)</option>
                   <option value="titulo-desc">🔤 Título (Z - A)</option>
                   <option value="autor-asc">✍️ Autor (A - Z)</option>
+                  <option value="localizacao">📍 Localização</option>
                   <option value="acervo-desc">📦 Quantidade de Exemplares</option>
                   <option value="recentes">🕒 Mais Recentes</option>
                   <option value="populares">⭐ Mais Populares</option>
                 </select>
               </div>
 
-              <div style="min-width: 150px;">
+              <div>
                 <label style="margin-bottom: 4px;">Filtrar Categoria:</label>
                 <select id="shelfFilterCategory" style="height: 38px; font-size: 13px;">
                   <option value="">Todas as Categorias</option>
                 </select>
               </div>
 
-              <div style="min-width: 150px;">
+              <div>
+                <label style="margin-bottom: 4px;">Filtrar Gênero:</label>
+                <select id="shelfFilterGenre" style="height: 38px; font-size: 13px;">
+                  <option value="">Todos os Gêneros</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="margin-bottom: 4px;">Classificação:</label>
+                <select id="shelfFilterClassificacao" style="height: 38px; font-size: 13px;">
+                  <option value="todos">Todos</option>
+                  <option value="fundamental">Ensino Fundamental</option>
+                  <option value="medio">Ensino Médio</option>
+                  <option value="sem">Sem classificação</option>
+                </select>
+              </div>
+
+              <div>
+                <label style="margin-bottom: 4px;">Localização:</label>
+                <select id="shelfFilterLocation" style="height: 38px; font-size: 13px;">
+                  <option value="todos">Todas</option>
+                  <option value="sem">Sem localização</option>
+                </select>
+              </div>
+
+              <div>
                 <label style="margin-bottom: 4px;">Filtrar Status:</label>
                 <select id="shelfFilterStatus" style="height: 38px; font-size: 13px;">
                   <option value="">Todos os Status</option>
@@ -2155,9 +2255,9 @@
                 </select>
               </div>
 
-              <div style="flex: 1; min-width: 180px;">
+              <div class="shelf-filter-busca">
                 <label style="margin-bottom: 4px;">Buscar na Estante:</label>
-                <input id="shelfSearchInput" placeholder="Buscar título ou autor..." style="height: 38px; font-size: 13px;" />
+                <input id="shelfSearchInput" placeholder="Buscar título, autor, categoria, gênero, localização..." style="height: 38px; font-size: 13px;" />
               </div>
             </div>
 
@@ -2634,6 +2734,23 @@
     </div>
   </div>
 
+  <!-- Modal: Localizar Livro (Estante) -->
+  <div class="modal-backdrop" id="modalLocalizarLivro" role="dialog" aria-modal="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h3>📍 Localizar Livro</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="#modalLocalizarLivro">&times;</button>
+      </div>
+      <div class="modal-body" id="localizarLivroConteudo">
+        <!-- Preenchido dinamicamente -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="secondary" data-close-modal="#modalLocalizarLivro">Fechar</button>
+        <button type="button" class="secondary" id="localizarEditarBtn">✏️ Editar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Devolução com estado de conservação -->
   <div class="modal-backdrop" id="modalDevolucao" role="dialog" aria-modal="true">
     <div class="modal-dialog">
@@ -2758,16 +2875,7 @@
           <div class="row four">
             <div>
               <label for="editarLivroCategoria">Categoria</label>
-              <select id="editarLivroCategoria" required>
-                <option value="">Selecione...</option>
-                <option>Literatura</option>
-                <option>História</option>
-                <option>Ciências</option>
-                <option>Geografia</option>
-                <option>Biografia</option>
-                <option>Arte</option>
-                <option>Outro</option>
-              </select>
+              <input id="editarLivroCategoria" placeholder="Ex.: Literatura, História, Ciências..." maxlength="80" required />
             </div>
             <div>
               <label for="editarLivroGenero">Gênero</label>

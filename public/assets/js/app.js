@@ -87,6 +87,7 @@ const state = {
   turmas: [],
   alunos: [],
   livros: [],
+  categorias: [], // mantido vazio: categoria é texto livre no livro
   emprestimos: [],
   dashboard: null,
   filtroEmprestimos: 'todos',
@@ -94,13 +95,14 @@ const state = {
   buscaLivro: '',
   buscaEmprestimo: '',
   ordemLivros: 'alfabetica-asc',
-  shelf: { groupBy: 'categoria', sortBy: 'titulo-asc', categoria: '', status: '', busca: '' },
+  shelf: { groupBy: 'categoria', sortBy: 'titulo-asc', categoria: '', genero: '', classificacao: 'todos', localizacao: 'todos', status: '', busca: '' },
   shelfView: 'spines', // 'spines' = estante de madeira | 'grid' = catálogo de cards
   rankingTab: 'alunos',
   relatorioAtual: null, // dados do último relatório gerado (para CSV/impressão)
   devolucaoEmprestimoId: null,
   editandoAlunoId: null,
   editandoLivroId: null,
+  localizarLivroId: null,
   scannerContexto: null, // 'livro' | 'emprestimo'
   dedPreview: []
 };
@@ -324,6 +326,13 @@ async function carregarLivros() {
   state.livros = await api('/api/livros');
 }
 
+// Categorias são TEXTO LIVRE no livro. O filtro da Estante gera as opções
+// automaticamente a partir das categorias existentes nos próprios livros.
+function categoriasExistentes() {
+  return [...new Set(state.livros.map(l => String(l.categoria || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+}
+
 async function carregarEmprestimos() {
   state.emprestimos = await api('/api/emprestimos');
 }
@@ -349,6 +358,7 @@ function totalEmprestimosLivro(livroId) {
 
 async function recarregarTudo() {
   await Promise.all([carregarAlunos(), carregarLivros(), carregarEmprestimos(), carregarDashboard()]);
+  popularSelectsCategorias();
   const passos = [
     ['renderDashboard', renderDashboard],
     ['renderAlunos', renderAlunos],
@@ -695,6 +705,49 @@ function formatarLocalizacao(livroOuLetra, numero) {
   return '';
 }
 
+function normalizarBuscaTexto(valor) {
+  return String(valor ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function livroTemLocalizacao(livro) {
+  return !!formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero);
+}
+
+function classificacaoAtendeFiltro(livro, filtro) {
+  const classificacao = String(livro.classificacao || '').trim();
+  if (filtro === 'todos' || !filtro) return true;
+  if (filtro === 'sem') return !classificacao;
+
+  const fundamental = classificacao === 'Ensino Fundamental' || classificacao === 'Fundamental e Médio';
+  const medio = classificacao === 'Ensino Médio' || classificacao === 'Fundamental e Médio';
+
+  if (filtro === 'fundamental') return fundamental;
+  if (filtro === 'medio') return medio;
+  return true;
+}
+
+function compararLocalizacao(a, b) {
+  const aLoc = formatarLocalizacao(a.localizacaoLetra, a.localizacaoNumero);
+  const bLoc = formatarLocalizacao(b.localizacaoLetra, b.localizacaoNumero);
+
+  if (!aLoc && !bLoc) return a.titulo.localeCompare(b.titulo, 'pt-BR');
+  if (!aLoc) return 1;
+  if (!bLoc) return -1;
+
+  const aLetra = String(a.localizacaoLetra || '').toUpperCase();
+  const bLetra = String(b.localizacaoLetra || '').toUpperCase();
+  const aNumero = Number.parseInt(a.localizacaoNumero, 10) || 0;
+  const bNumero = Number.parseInt(b.localizacaoNumero, 10) || 0;
+
+  if (aLetra !== bLetra) return aLetra.localeCompare(bLetra, 'pt-BR');
+  if (aNumero !== bNumero) return aNumero - bNumero;
+  return a.titulo.localeCompare(b.titulo, 'pt-BR');
+}
+
 function dadosMetadataLivro(l) {
   const metadados = [];
   if (l.genero) metadados.push(`Gênero: ${escapeHtml(l.genero)}`);
@@ -733,7 +786,7 @@ async function cadastrarLivro(e) {
   e.preventDefault();
   const titulo = $('#livroTitulo').value.trim();
   const autor = $('#livroAutor').value.trim();
-  const categoria = $('#livroCategoria').value;
+  const categoria = $('#livroCategoria').value.trim();
   const acervo = parseInt($('#livroAcervo').value, 10) || 1;
   const capaUrl = $('#livroCapa').value.trim();
   const isbn = $('#livroIsbn').value.trim();
@@ -826,7 +879,7 @@ function abrirEditarLivro(id) {
 async function salvarEdicaoLivro() {
   const titulo = $('#editarLivroTitulo').value.trim();
   const autor = $('#editarLivroAutor').value.trim();
-  const categoria = $('#editarLivroCategoria').value;
+  const categoria = $('#editarLivroCategoria').value.trim();
   const acervo = parseInt($('#editarLivroAcervo').value, 10) || 1;
   const capaUrl = $('#editarLivroCapa').value.trim();
   const genero = $('#editarLivroGenero').value.trim();
@@ -1111,62 +1164,125 @@ function statusLivroEstante(livro) {
   return { chave: 'indisponivel', label: 'Indisponível', pill: 'badge-returned' };
 }
 
+function popularSelectsCategorias() {
+  // Categoria agora é texto livre no cadastro/edição — só o filtro da Estante
+  // precisa ser preenchido, e as opções vêm das categorias dos próprios livros.
+  const shelfCategoria = $('#shelfFilterCategory');
+  if (!shelfCategoria) return;
+
+  const categorias = categoriasExistentes();
+  const atual = state.shelf.categoria || shelfCategoria.value || '';
+  shelfCategoria.innerHTML = '<option value="">Todas as Categorias</option>' +
+    categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  shelfCategoria.value = categorias.includes(atual) ? atual : '';
+  state.shelf.categoria = shelfCategoria.value;
+}
+
 function renderEstante() {
-  const { groupBy, sortBy, categoria, status, busca } = state.shelf;
+  const { groupBy, sortBy, categoria, genero, classificacao, localizacao, status, busca } = state.shelf;
 
-  $('#estanteTotalLivros').textContent = `${state.livros.length} livro(s) no acervo`;
-
-  // Popula filtro de categorias (uma vez)
   const filtroCat = $('#shelfFilterCategory');
-  const catAtual = filtroCat.value;
-  const categorias = [...new Set(state.livros.map(l => l.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const filtroGenero = $('#shelfFilterGenre');
+  const filtroClassificacao = $('#shelfFilterClassificacao');
+  const filtroLocalizacao = $('#shelfFilterLocation');
+
+  const categorias = categoriasExistentes();
   filtroCat.innerHTML = '<option value="">Todas as Categorias</option>' +
     categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (categorias.includes(catAtual)) filtroCat.value = catAtual;
 
-  let lista = [...state.livros];
-  if (categoria) lista = lista.filter(l => l.categoria === categoria);
-  if (status) lista = lista.filter(l => statusLivroEstante(l).chave === status);
-  if (busca.trim()) {
-    const b = busca.trim().toLowerCase();
-    lista = lista.filter(l => l.titulo.toLowerCase().includes(b) || l.autor.toLowerCase().includes(b));
+  const generos = [...new Set(state.livros.map(l => l.genero).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  filtroGenero.innerHTML = '<option value="">Todos os Gêneros</option>' +
+    generos.map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
+
+  if (categorias.includes(state.shelf.categoria)) {
+    filtroCat.value = state.shelf.categoria;
+  } else {
+    state.shelf.categoria = '';
+    filtroCat.value = '';
   }
 
-  // Ordenação
+  if (generos.includes(state.shelf.genero)) {
+    filtroGenero.value = state.shelf.genero;
+  } else {
+    state.shelf.genero = '';
+    filtroGenero.value = '';
+  }
+
+  if (!['todos', 'fundamental', 'medio', 'sem'].includes(state.shelf.classificacao)) {
+    state.shelf.classificacao = 'todos';
+  }
+  filtroClassificacao.value = state.shelf.classificacao || 'todos';
+
+  if (!['todos', 'sem'].includes(state.shelf.localizacao)) {
+    state.shelf.localizacao = 'todos';
+  }
+  filtroLocalizacao.value = state.shelf.localizacao || 'todos';
+
+  let lista = [...state.livros];
+
+  if (categoria) lista = lista.filter(l => l.categoria === categoria);
+  if (genero) lista = lista.filter(l => l.genero === genero);
+  if (classificacao && classificacao !== 'todos') lista = lista.filter(l => classificacaoAtendeFiltro(l, classificacao));
+  if (localizacao === 'sem') lista = lista.filter(l => !livroTemLocalizacao(l));
+  if (status) lista = lista.filter(l => statusLivroEstante(l).chave === status);
+
+  if (busca.trim()) {
+    const buscaNormalizada = normalizarBuscaTexto(busca);
+    lista = lista.filter(l => {
+      const textosBusca = [
+        l.titulo,
+        l.autor,
+        l.categoria,
+        l.genero,
+        l.classificacao,
+        formatarLocalizacao(l.localizacaoLetra, l.localizacaoNumero),
+        `${l.localizacaoLetra || ''}${l.localizacaoNumero || ''}`,
+        l.localizacaoLetra ? `estante${l.localizacaoLetra}` : ''
+      ].map(normalizarBuscaTexto);
+      return textosBusca.some(texto => texto.includes(buscaNormalizada));
+    });
+  }
+
   if (sortBy === 'titulo-asc') lista.sort((a, b) => a.titulo.localeCompare(b.titulo, 'pt-BR'));
   else if (sortBy === 'titulo-desc') lista.sort((a, b) => b.titulo.localeCompare(a.titulo, 'pt-BR'));
   else if (sortBy === 'autor-asc') lista.sort((a, b) => a.autor.localeCompare(b.autor, 'pt-BR'));
   else if (sortBy === 'acervo-desc') lista.sort((a, b) => b.acervo - a.acervo);
   else if (sortBy === 'recentes') lista.sort((a, b) => (b.id || 0) - (a.id || 0));
   else if (sortBy === 'populares') lista.sort((a, b) => totalEmprestimosLivro(b.id) - totalEmprestimosLivro(a.id));
+  else if (sortBy === 'localizacao') lista.sort(compararLocalizacao);
 
   const container = $('#shelfContainer');
+  $('#estanteTotalLivros').textContent = `${lista.length} livro(s) encontrados de ${state.livros.length} no acervo`;
+
   if (!lista.length) {
-    container.innerHTML = '<div class="empty">Nenhum livro encontrado com os filtros atuais.</div>';
+    container.innerHTML = '<div class="empty">Nenhum livro encontrado com os filtros selecionados.</div>';
     return;
   }
 
-  // Agrupamento (usado por ambas as visualizações)
   const grupos = new Map();
   if (groupBy !== 'nenhum') {
     for (const l of lista) {
       let chave;
       if (groupBy === 'categoria') chave = l.categoria;
       else if (groupBy === 'autor') chave = l.autor;
+      else if (groupBy === 'estante') chave = livroTemLocalizacao(l) ? `Estante ${l.localizacaoLetra}` : 'Sem localização';
       else chave = statusLivroEstante(l).label;
       if (!grupos.has(chave)) grupos.set(chave, []);
       grupos.get(chave).push(l);
     }
   }
 
-  const iconeGrupo = groupBy === 'categoria' ? '📂' : groupBy === 'autor' ? '✍️' : '🟢';
+  const iconeGrupo = groupBy === 'categoria' ? '📂' : groupBy === 'autor' ? '✍️' : groupBy === 'estante' ? '📍' : '🟢';
 
-  // ===== Visualização 1: Estante de madeira com livros em pé (lombadas 3D) =====
   if (state.shelfView === 'spines') {
     if (groupBy === 'nenhum') {
       container.innerHTML = secaoEstanteMadeira('🏢 Acervo completo', lista, iconeGrupo, false);
     } else {
-      const chaves = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      const chaves = [...grupos.keys()].sort((a, b) => {
+        if (a === 'Sem localização') return 1;
+        if (b === 'Sem localização') return -1;
+        return a.localeCompare(b, 'pt-BR');
+      });
       container.innerHTML = chaves.map(chave =>
         secaoEstanteMadeira(`${iconeGrupo} ${chave}`, grupos.get(chave), iconeGrupo, true)
       ).join('');
@@ -1174,11 +1290,14 @@ function renderEstante() {
     return;
   }
 
-  // ===== Visualização 2: Catálogo em cards com capas =====
   if (groupBy === 'nenhum') {
     container.innerHTML = `<div class="estante-grid">${lista.map(cardEstante).join('')}</div>`;
   } else {
-    const chaves = [...grupos.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const chaves = [...grupos.keys()].sort((a, b) => {
+      if (a === 'Sem localização') return 1;
+      if (b === 'Sem localização') return -1;
+      return a.localeCompare(b, 'pt-BR');
+    });
     container.innerHTML = chaves.map(chave => `
       <div class="wood-shelf-section">
         <div class="wood-shelf-header">
@@ -1230,6 +1349,7 @@ function secaoEstanteMadeira(titulo, livros, iconeGrupo, comHeader) {
 function cardEstante(livro) {
   const st = statusLivroEstante(livro);
   const disp = disponiveisLivro(livro.id);
+  const loc = formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero) || 'Localização não cadastrada';
   const capa = livro.capaUrl
     ? `<img src="${escapeHtml(livro.capaUrl)}" alt="Capa de ${escapeHtml(livro.titulo)}" loading="lazy"
          onerror="this.style.display='none'; this.parentElement.querySelector('.placeholder').style.display='flex';" />
@@ -1244,9 +1364,24 @@ function cardEstante(livro) {
       <div class="estante-body">
         <div class="estante-title">${escapeHtml(livro.titulo)}</div>
         <div class="estante-author">${escapeHtml(livro.autor)}</div>
+        <div class="estante-meta-row">
+          <span class="estante-tag">${escapeHtml(livro.categoria)}</span>
+          ${livro.genero ? `<span class="estante-tag estante-tag-alt">${escapeHtml(livro.genero)}</span>` : ''}
+        </div>
+        <div class="estante-meta-row estante-meta-row-compact">
+          <span class="estante-tag estante-tag-muted">${escapeHtml(livro.classificacao || 'Classificação não definida')}</span>
+        </div>
+        <div class="estante-location">
+          <span class="estante-location-icon">📍</span>
+          <span>${escapeHtml(loc)}</span>
+        </div>
         <div class="estante-footer">
-          <span class="estante-categoria">${escapeHtml(livro.categoria)}</span>
+          <span class="estante-availability">${disp > 0 ? 'Disponível' : 'Emprestado'}</span>
           <small class="muted" style="font-weight:900;">${disp} disp.</small>
+        </div>
+        <div class="estante-actions">
+          <button type="button" class="secondary btn-small" data-localizar-livro="${livro.id}">📍 Localizar</button>
+          <button type="button" class="secondary btn-small" data-editar-livro="${livro.id}">✏️ Editar</button>
         </div>
       </div>
     </div>
@@ -1259,25 +1394,31 @@ function abrirDetalhesLivro(id) {
   const st = statusLivroEstante(livro);
   const disp = disponiveisLivro(livro.id);
   const totalEmp = totalEmprestimosLivro(livro.id);
+  const localizacao = formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero) || 'Localização não cadastrada';
 
   $('#detalhesTituloModal').textContent = `📖 ${livro.titulo}`;
   $('#detalhesLivroConteudo').innerHTML = `
-    <div style="display:flex; gap:16px; align-items:flex-start;">
-      <div style="width:120px; height:170px; border-radius:10px; overflow:hidden; flex-shrink:0; background:#f1f5f9; display:flex; align-items:center; justify-content:center;">
-        ${livro.capaUrl
-          ? `<img src="${escapeHtml(livro.capaUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=\"font-size:48px;\">📖</span>'" />`
-          : `<span style="font-size:48px;">📖</span>`}
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="width:120px; height:170px; border-radius:10px; overflow:hidden; flex-shrink:0; background:#f1f5f9; display:flex; align-items:center; justify-content:center;">
+          ${livro.capaUrl
+            ? `<img src="${escapeHtml(livro.capaUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=\"font-size:48px;\">📖</span>'" />`
+            : `<span style="font-size:48px;">📖</span>`}
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:750;">
+          <div><strong>Autor:</strong> ${escapeHtml(livro.autor)}</div>
+          <div><strong>Categoria:</strong> ${escapeHtml(livro.categoria)}</div>
+          <div><strong>Gênero:</strong> ${escapeHtml(livro.genero || '—')}</div>
+          <div><strong>Classificação:</strong> ${escapeHtml(livro.classificacao || 'Classificação não definida')}</div>
+          <div><strong>Exemplares:</strong> ${livro.acervo}</div>
+          <div><strong>Disponíveis:</strong> ${disp}</div>
+          <div><strong>Total de empréstimos:</strong> ${totalEmp}</div>
+          <div><span class="status-pill ${st.pill}">${st.label}</span></div>
+        </div>
       </div>
-      <div style="flex:1; display:flex; flex-direction:column; gap:8px; font-size:13px; font-weight:750;">
-        <div><strong>Autor:</strong> ${escapeHtml(livro.autor)}</div>
-        <div><strong>Categoria:</strong> ${escapeHtml(livro.categoria)}</div>
-        <div><strong>Gênero:</strong> ${escapeHtml(livro.genero || '—')}</div>
-        <div><strong>Classificação:</strong> ${escapeHtml(livro.classificacao || '—')}</div>
-        <div><strong>Localização:</strong> ${escapeHtml(formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero) || '—')}</div>
-        <div><strong>Exemplares:</strong> ${livro.acervo}</div>
-        <div><strong>Disponíveis:</strong> ${disp}</div>
-        <div><strong>Total de empréstimos:</strong> ${totalEmp}</div>
-        <div><span class="status-pill ${st.pill}">${st.label}</span></div>
+      <div style="padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(59,130,246,0.25); background: rgba(96,165,250,0.08); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; font-weight:900;">
+        <span style="color: var(--muted);">📍 Localização física</span>
+        <strong style="font-size:16px; color: var(--text);">${escapeHtml(localizacao)}</strong>
       </div>
     </div>
   `;
@@ -1289,6 +1430,55 @@ function abrirDetalhesLivro(id) {
   `;
 
   abrirModal('#modalDetalhesLivro');
+}
+
+function abrirLocalizarLivro(id) {
+  const livro = state.livros.find(l => l.id === id);
+  if (!livro) return;
+  state.localizarLivroId = id;
+
+  const st = statusLivroEstante(livro);
+  const disp = disponiveisLivro(livro.id);
+  const loc = formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero);
+  const temLoc = livroTemLocalizacao(livro);
+  const capa = livro.capaUrl
+    ? `<img src="${escapeHtml(livro.capaUrl)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'; this.parentElement.querySelector('.localizar-placeholder').style.display='flex';" /><div class="localizar-placeholder" style="display:none; align-items:center; justify-content:center; width:100%; height:100%; font-size:48px;">📖</div>`
+    : `<div style="display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:48px;">📖</div>`;
+
+  $('#localizarLivroConteudo').innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; gap:16px; align-items:flex-start;">
+        <div style="width:110px; height:158px; border-radius:10px; overflow:hidden; flex-shrink:0; background:#f1f5f9;">
+          ${capa}
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:750; min-width:0;">
+          <div style="font-size:15px; font-weight:1000; line-height:1.3;">${escapeHtml(livro.titulo)}</div>
+          <div><strong>Autor:</strong> ${escapeHtml(livro.autor)}</div>
+          <div><strong>Categoria:</strong> ${escapeHtml(livro.categoria)}</div>
+          <div><strong>Gênero:</strong> ${escapeHtml(livro.genero || '—')}</div>
+          <div><strong>Classificação:</strong> ${escapeHtml(livro.classificacao || 'Classificação não definida')}</div>
+          <div><strong>Disponibilidade:</strong>
+            <span class="status-pill ${st.pill}">${st.label}</span>
+            <span style="color:var(--muted);">(${disp} de ${livro.acervo} exemplares)</span>
+          </div>
+        </div>
+      </div>
+      ${temLoc ? `
+      <div style="text-align:center; padding:20px 14px; border-radius:14px; border:2px solid rgba(59,130,246,0.45); background:linear-gradient(180deg, rgba(96,165,250,0.16), rgba(96,165,250,0.08));">
+        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">📍 Localização física</div>
+        <div style="font-size:17px; font-weight:900; color:#1d4ed8;">Estante ${escapeHtml(String(livro.localizacaoLetra || '').toUpperCase())} — posição ${escapeHtml(String(livro.localizacaoNumero ?? '').padStart(2, '0'))}</div>
+        <div style="font-size:34px; font-weight:1000; letter-spacing:0.06em; color:var(--text); margin-top:4px;">${escapeHtml(loc)}</div>
+      </div>`
+      : `
+      <div style="text-align:center; padding:20px 14px; border-radius:14px; border:2px dashed rgba(148,163,184,0.6); background:#f8fafc;">
+        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">📍 Localização física</div>
+        <div style="font-size:18px; font-weight:1000; color:var(--muted);">Localização não cadastrada</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:6px;">Use “✏️ Editar” para cadastrar a estante e a posição deste livro.</div>
+      </div>`}
+    </div>
+  `;
+
+  abrirModal('#modalLocalizarLivro');
 }
 
 function irEmprestar(livroId) {
@@ -2286,6 +2476,9 @@ function bindEventos() {
   $('#shelfGroupBy').addEventListener('change', (e) => { state.shelf.groupBy = e.target.value; renderEstante(); });
   $('#shelfSortBy').addEventListener('change', (e) => { state.shelf.sortBy = e.target.value; renderEstante(); });
   $('#shelfFilterCategory').addEventListener('change', (e) => { state.shelf.categoria = e.target.value; renderEstante(); });
+  $('#shelfFilterGenre').addEventListener('change', (e) => { state.shelf.genero = e.target.value; renderEstante(); });
+  $('#shelfFilterClassificacao').addEventListener('change', (e) => { state.shelf.classificacao = e.target.value; renderEstante(); });
+  $('#shelfFilterLocation').addEventListener('change', (e) => { state.shelf.localizacao = e.target.value; renderEstante(); });
   $('#shelfFilterStatus').addEventListener('change', (e) => { state.shelf.status = e.target.value; renderEstante(); });
   $('#shelfSearchInput').addEventListener('input', (e) => { state.shelf.busca = e.target.value; renderEstante(); });
   $('#btnViewSpines').addEventListener('click', () => {
@@ -2301,16 +2494,37 @@ function bindEventos() {
     renderEstante();
   });
   $('#shelfContainer').addEventListener('click', (e) => {
+    const localizar = e.target.closest('[data-localizar-livro]');
+    const editar = e.target.closest('[data-editar-livro]');
     const card = e.target.closest('[data-detalhes-livro]');
+
+    if (localizar) {
+      abrirLocalizarLivro(Number(localizar.getAttribute('data-localizar-livro')));
+      return;
+    }
+
+    if (editar) {
+      abrirEditarLivro(Number(editar.getAttribute('data-editar-livro')));
+      return;
+    }
+
     if (card) abrirDetalhesLivro(Number(card.getAttribute('data-detalhes-livro')));
   });
   $('#detalhesLivroAcoes').addEventListener('click', (e) => {
     const btnEtiqueta = e.target.closest('[data-etiqueta-livro]');
     const btnEditar = e.target.closest('[data-editar-livro]');
     const btnEmprestar = e.target.closest('[data-ir-emprestar]');
+    const btnLocalizar = e.target.closest('[data-localizar-livro]');
     if (btnEtiqueta) abrirEtiqueta(Number(btnEtiqueta.getAttribute('data-etiqueta-livro')));
     if (btnEditar) abrirEditarLivro(Number(btnEditar.getAttribute('data-editar-livro')));
     if (btnEmprestar) irEmprestar(Number(btnEmprestar.getAttribute('data-ir-emprestar')));
+    if (btnLocalizar) abrirLocalizarLivro(Number(btnLocalizar.getAttribute('data-localizar-livro')));
+  });
+
+  // ----- Modal Localizar Livro -----
+  $('#localizarEditarBtn').addEventListener('click', () => {
+    fecharModal('#modalLocalizarLivro');
+    if (state.localizarLivroId) abrirEditarLivro(state.localizarLivroId);
   });
 
   // ----- Empréstimos -----
