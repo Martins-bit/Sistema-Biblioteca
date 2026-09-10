@@ -6,3 +6,15 @@ node_modules/
 .DS_Store
 Thumbs.db
 .env
+biblioteca.db-shm
+biblioteca.db-wal
+
+cookies.txt
+*.out
+# SQLite temporário
+*.db-shm
+*.db-wal
+
+# Arquivos temporários de testes
+cookies.txt
+*.out
