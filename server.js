@@ -74,6 +74,18 @@ app.use(session({
 app.use('/api/auth', authRoutes);
 app.use('/api/alunos', requireAuth, alunosRoutes);
 app.use('/api/livros', requireAuth, livrosRoutes);
+
+// Busca de livro por ISBN com fallback entre fontes (BrasilAPI, Google Books, Open Library)
+const { buscarLivroPorIsbn } = require('./services/isbn');
+app.get('/api/isbn/:isbn', requireAuth, async (req, res) => {
+  try {
+    const resultado = await buscarLivroPorIsbn(req.params.isbn);
+    res.json(resultado);
+  } catch (error) {
+    console.error('Erro na busca por ISBN:', error);
+    res.status(500).json({ encontrado: false, motivo: 'Erro interno na busca por ISBN.' });
+  }
+});
 app.use('/api/emprestimos', requireAuth, emprestimosRoutes);
 app.use('/api/turmas', requireAuth, turmasRoutes);
 app.use('/api/dashboard', requireAuth, dashboardRoutes);

@@ -1096,35 +1096,19 @@ async function processarCodigoLido(codigo) {
 async function buscarIsbnEPreencher(isbn, selecionarEmprestimo) {
   mostrarFeedbackScanner(`Buscando ISBN ${isbn} nas bases públicas...`, 'ok');
   try {
-    let dados = null;
-    for (const fonte of [`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`, `https://openlibrary.org/isbn/${isbn}.json`]) {
-      try {
-        const resposta = await fetch(fonte);
-        if (!resposta.ok) continue;
-        const recebido = await resposta.json();
-        if (recebido.items?.[0]?.volumeInfo) {
-          const info = recebido.items[0].volumeInfo;
-          dados = { title: info.title, authors: (info.authors || []).map(name => ({ name })), cover: info.imageLinks?.thumbnail };
-        } else if (recebido.title) {
-          dados = recebido;
-        }
-        if (dados?.title) break;
-      } catch (e) {}
+    // Consulta o backend (services/isbn.js): normaliza o ISBN, tenta o ISBN-10
+    // e o ISBN-13 equivalentes e usa FALLBACK entre BrasilAPI, Google Books e
+    // Open Library, complementando dados parciais. Nunca sobrescreve um valor
+    // válido com vazio e nunca inventa livro.
+    const resposta = await api(`/api/isbn/${encodeURIComponent(isbn)}`);
+
+    if (!resposta?.encontrado || !resposta.titulo) {
+      throw new Error(resposta?.motivo || 'não encontrado');
     }
-    if (!dados) throw new Error('não encontrado');
-    const titulo = dados.title || '';
-    let autor = dados.authors?.[0]?.name || '';
-    if (dados.authors && dados.authors.length) {
-      try {
-        const resAutor = await fetch(`https://openlibrary.org${dados.authors[0].key}.json`);
-        const dadosAutor = await resAutor.json();
-        autor = dadosAutor.name || '';
-      } catch (e) {}
-    }
-    if (!titulo) throw new Error('sem título');
 
     if (selecionarEmprestimo) {
-      const livro = state.livros.find(l => l.titulo.toLowerCase() === titulo.toLowerCase());
+      const titulo = String(resposta.titulo).toLowerCase();
+      const livro = state.livros.find(l => l.titulo.toLowerCase() === titulo);
       if (livro) {
         const sel = $('#emprestimoLivro');
         sel.value = String(livro.id);
@@ -1135,14 +1119,25 @@ async function buscarIsbnEPreencher(isbn, selecionarEmprestimo) {
       }
     }
 
-    $('#livroTitulo').value = titulo;
-    if (autor) $('#livroAutor').value = autor;
-    $('#livroIsbn').value = isbn;
-    if (dados.cover) $('#livroCapa').value = dados.cover.replace('http://', 'https://');
+    // Preenchimento automático — TODOS os campos continuam editáveis pela
+    // bibliotecária, que pode alterar qualquer valor antes de salvar.
+    $('#livroTitulo').value = resposta.titulo || '';
+    $('#livroAutor').value = resposta.autor || '';
+    $('#livroCategoria').value = resposta.categoria || '';
+    $('#livroGenero').value = resposta.genero || '';
+    $('#livroIsbn').value = resposta.isbn || isbn;
+    if (resposta.capa) $('#livroCapa').value = resposta.capa.replace('http://', 'https://');
     atualizarPreviewCapa();
     await fecharScanner();
-    toast(`Dados do ISBN preenchidos! Verifique e cadastre o livro.`);
+
+    const fontes = resposta.fontes?.length ? resposta.fontes.join(' + ') : 'base pública';
+    console.log(`[ISBN] Encontrado via: ${fontes} | título="${resposta.titulo}" autor="${resposta.autor}" categoria="${resposta.categoria || '—'}" gênero="${resposta.genero || '—'}"`);
+
+    let aviso = 'Dados do ISBN preenchidos! Verifique antes de salvar.';
+    if (!resposta.categoria && !resposta.genero) aviso = 'Dados preenchidos (sem categoria/gênero confiáveis). Complete manualmente.';
+    toast(aviso);
   } catch (e) {
+    console.log('[ISBN] Não encontrado:', e.message);
     mostrarFeedbackScanner('ISBN não encontrado nas bases públicas. Preencha manualmente.', 'erro');
   }
 }
