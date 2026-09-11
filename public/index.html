@@ -2651,36 +2651,35 @@
     </div>
   </div>
 
-  <!-- Modal: Leitor QR Code / Código de Barras (Câmera + ISBN) -->
+  <!-- Modal: Leitor USB (código de barras / QR Code) + ISBN -->
   <div class="modal-backdrop" id="modalQrScanner" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 id="qrModalTitle">📷 Leitor de QR Code & Código de Barras (ISBN)</h3>
+        <h3 id="qrModalTitle">🔎 Leitor de Código de Barras / QR Code (USB)</h3>
         <button type="button" class="modal-close-btn" id="btnFecharScanner">&times;</button>
       </div>
       <div class="modal-body">
         <div class="qr-scanner-box">
-          <div id="qrReaderElem" style="width: 100%;"></div>
-        </div>
-
-        <div style="margin-top: 14px; display: flex; gap: 8px; align-items: center; justify-content: space-between;">
-          <span style="font-size: 12px; color: var(--muted); font-weight: 800;">
-            Aponte a câmera para o QR Code ou código de barras ISBN do livro.
-          </span>
-        </div>
-
-        <div style="margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px;">
-          <label for="scannerManualInput" style="margin-bottom: 6px;">Ou digite/leia com leitor USB de código de barras:</label>
-          <div style="display: flex; gap: 8px;">
-            <input id="scannerManualInput" placeholder="Ex.: 9788535902778 ou código..." style="flex:1;" />
-            <button type="button" id="scannerManualBuscarBtn" class="secondary btn-small">Buscar Livro</button>
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <span style="font-size: 13px; font-weight: 800; color: var(--muted);">
+              Leia o código de barras ou QR Code com o leitor USB — a leitura é automática.
+            </span>
+          </div>
+          <div id="scannerInputWrap" style="border: 2px dashed var(--border); border-radius: 10px; padding: 10px; background: var(--surface-2, #f8fafc);">
+            <label for="scannerManualInput" style="font-size: 12px; font-weight: 800; display: block; margin-bottom: 6px;">
+              ISBN / Código de barras / QR Code
+            </label>
+            <div style="display: flex; gap: 8px;">
+              <input id="scannerManualInput" placeholder="Ex.: 9788535902778 ou código..." style="flex:1;" autocomplete="off" />
+              <button type="button" id="scannerManualBuscarBtn" class="secondary btn-small">Buscar Livro</button>
+            </div>
           </div>
         </div>
 
         <div id="scannerFeedback" style="margin-top: 12px; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 800; display: none;"></div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="secondary" id="btnCancelarScanner">Fechar Scanner</button>
+        <button type="button" class="secondary" id="btnCancelarScanner">Fechar Leitor</button>
       </div>
     </div>
   </div>

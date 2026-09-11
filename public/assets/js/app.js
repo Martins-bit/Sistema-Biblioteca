@@ -982,43 +982,45 @@ function abrirEtiqueta(id) {
 }
 
 // ---------------- Scanner QR / ISBN ----------------
+// Integração com LEITOR FÍSICO USB (funciona como teclado e envia Enter
+// após a leitura). NÃO usa câmera/webcam.
 
-let html5Scanner = null;
+// Proteção contra leitura duplicada: leitores USB às vezes enviam o mesmo
+// código duas vezes em sequência. Ignoramos o mesmo valor por 4 segundos.
+let ultimaLeitura = { codigo: null, ts: 0 };
+const LEITURA_DUPLICADA_MS = 4000;
+
+function leituraDuplicada(valor) {
+  const agora = Date.now();
+  if (valor === ultimaLeitura.codigo && (agora - ultimaLeitura.ts) < LEITURA_DUPLICADA_MS) return true;
+  ultimaLeitura = { codigo: valor, ts: agora };
+  return false;
+}
+
+// Validação client-side rápida: é um ISBN plausível (10 dígitos, ou 13
+// começando com 978/979)? A validação completa (dígito verificador) fica
+// no backend (services/isbn.js).
+function pareceIsbn(valor) {
+  const dig = String(valor || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+  if (dig.length === 13 && /^97[89]/.test(dig)) return true;
+  if (dig.length === 10 && /^[0-9]{9}[0-9X]$/.test(dig)) return true;
+  return false;
+}
 
 function abrirScanner(contexto) {
   state.scannerContexto = contexto;
   abrirModal('#modalQrScanner');
-  mostrarFeedbackScanner('');
+  mostrarFeedbackScanner('Leia o código de barras ou QR Code com o leitor USB, ou digite o código/ISBN.', 'aviso');
 
-  // Câmera só funciona se a biblioteca vendor estiver carregada
-  if (typeof Html5Qrcode === 'undefined') {
-    mostrarFeedbackScanner('📷 Leitura por câmera indisponível: biblioteca html5-qrcode não encontrada em assets/js/vendor/. Use a digitação manual abaixo.', 'aviso');
-    return;
-  }
-
-  try {
-    html5Scanner = new Html5Qrcode('qrReaderElem');
-    html5Scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
-      (textoDecodificado) => {
-        mostrarFeedbackScanner(`Código lido: ${textoDecodificado}`, 'ok');
-        processarCodigoLido(textoDecodificado);
-      }
-    ).catch(() => {
-      mostrarFeedbackScanner('Não foi possível acessar a câmera. Use a digitação manual.', 'erro');
-    });
-  } catch (e) {
-    mostrarFeedbackScanner('Erro ao iniciar o leitor. Use a digitação manual.', 'erro');
+  // Foco pronto para o leitor USB — ele "digita" no campo e envia Enter.
+  const input = $('#scannerManualInput');
+  if (input) {
+    input.value = '';
+    setTimeout(() => input.focus(), 100);
   }
 }
 
-async function fecharScanner() {
-  if (html5Scanner) {
-    try { await html5Scanner.stop(); } catch (e) {}
-    try { html5Scanner.clear(); } catch (e) {}
-    html5Scanner = null;
-  }
+function fecharScanner() {
   fecharModal('#modalQrScanner');
 }
 
@@ -1033,6 +1035,20 @@ function mostrarFeedbackScanner(msg, tipo) {
 
 async function processarCodigoLido(codigo) {
   const valor = String(codigo || '').trim();
+  if (!valor) return;
+
+  // 1. Leitura duplicada em sequência rápida → ignorar (não refaz consulta,
+  //    não repete ação). Nova leitura de código diferente ou após o tempo
+  //    funciona normalmente.
+  if (leituraDuplicada(valor)) {
+    console.log('[Leitor] Leitura duplicada ignorada:', valor);
+    mostrarFeedbackScanner('Leitura repetida ignorada. Leia novamente se necessário.', 'aviso');
+    return;
+  }
+
+  mostrarFeedbackScanner('Lendo código...', 'aviso');
+
+  // 2. QR interno da biblioteca: LIVRO:<id>:<titulo>
   const qr = valor.match(/^LIVRO\s*:\s*(\d+)\s*:/i);
   if (qr) {
     const livroQr = state.livros.find(l => Number(l.id) === Number(qr[1]));
@@ -1086,9 +1102,12 @@ async function processarCodigoLido(codigo) {
     }
   } else {
     if (isbn.length >= 10) {
+      mostrarFeedbackScanner('ISBN identificado. Buscando livro...', 'aviso');
       await buscarIsbnEPreencher(isbn, false);
+    } else if (/^LIVRO\s*:/i.test(valor)) {
+      mostrarFeedbackScanner('QR Code interno identificado, mas o livro não está cadastrado. Cadastre o livro primeiro.', 'erro');
     } else {
-      mostrarFeedbackScanner(`Código "${codigo}" não parece um ISBN.`, 'aviso');
+      mostrarFeedbackScanner('Código não reconhecido. Tente novamente ou digite o ISBN.', 'erro');
     }
   }
 }
