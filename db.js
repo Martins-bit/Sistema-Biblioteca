@@ -190,13 +190,31 @@ try {
   // Antes cada chamada abria uma nova conexão sem fechá-la (vazamento de handles);
   // agora reutilizamos uma única instância — a API de uso (db().prepare(...)) é mantida.
   let sharedDb = null;
-  module.exports = function() {
+  function getDb() {
     if (!sharedDb || !sharedDb.open) {
       sharedDb = new Database(dbPath);
       sharedDb.pragma('journal_mode = WAL');
     }
     return sharedDb;
+  }
+
+  // Fecha a conexão compartilhada (usado pela restauração de backup, que
+  // precisa substituir o arquivo do banco com segurança antes de reabrir).
+  getDb.fechar = function() {
+    if (sharedDb && sharedDb.open) {
+      try { sharedDb.pragma('wal_checkpoint(TRUNCATE)'); } catch (_) {}
+      try { sharedDb.close(); } catch (_) {}
+    }
+    sharedDb = null;
   };
+
+  // Reabre a conexão (o próximo getDb() a recria). A API de uso é mantida.
+  getDb.reabrir = function() {
+    getDb.fechar();
+    return getDb();
+  };
+
+  module.exports = getDb;
 
 } catch (error) {
   console.error('❌ Erro ao inicializar o banco de dados:');

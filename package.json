@@ -10,7 +10,8 @@
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^13.0.3",
     "express": "^4.22.2",
-    "express-session": "^1.19.0"
+    "express-session": "^1.19.0",
+    "multer": "^2.4.0"
   },
   "devDependencies": {
     "patchright": "^1.62.2"

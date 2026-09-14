@@ -2435,33 +2435,101 @@
         </div>
       </section>
 
-      <!-- Backup e Limpeza (dentro de Relatórios) -->
+      <!-- Backup dos Dados e Limpeza (dentro de Relatórios) -->
       <section class="card backup full-width" id="secBackup" data-section="relatorios">
         <header class="card-header">
           <div>
-            <h2>Backup e Limpeza</h2>
-            <small>Exportar/Importar e resetar</small>
+            <h2>💾 Backup dos Dados</h2>
+            <small>Proteção e restauração do banco da biblioteca</small>
           </div>
           <small class="muted">Ações críticas</small>
         </header>
         <div class="card-body">
+          <!-- Status do último backup -->
+          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; margin-bottom:14px;">
+            <div>
+              <div style="font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800;">Último backup</div>
+              <div id="backupUltimo" style="font-size:16px; font-weight:900;">Carregando…</div>
+              <div id="backupUltimoDetalhe" class="muted" style="font-size:12px;"></div>
+            </div>
+            <div class="actions" style="margin:0;">
+              <button type="button" id="criarBackupBtn">💾 Fazer backup agora</button>
+            </div>
+          </div>
+
+          <!-- Backup automático -->
+          <div style="background: var(--surface-2, #f8fafc); border:1px solid var(--border, #e5e7eb); border-radius:12px; padding:14px; margin-bottom:16px;">
+            <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <label for="backupAutomatico" style="margin:0; font-weight:800;">Backup automático</label>
+                <input type="checkbox" id="backupAutomatico" style="width:auto; height:auto;" />
+              </div>
+              <div style="display:flex; align-items:center; gap:10px;">
+                <label for="backupFrequencia" style="margin:0; font-weight:800;">Frequência</label>
+                <select id="backupFrequencia" style="height:40px; min-width:160px;">
+                  <option value="diario">Diário</option>
+                  <option value="semanal">Semanal</option>
+                </select>
+              </div>
+            </div>
+            <div class="muted" id="backupRetencaoInfo" style="font-size:12px; margin-top:8px;">
+              Backups automáticos são mantidos até o limite de retenção; os manuais nunca são apagados automaticamente.
+            </div>
+          </div>
+
+          <!-- Histórico -->
+          <div style="margin-bottom:16px;">
+            <div style="font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; margin-bottom:8px;">Histórico de backups</div>
+            <ul id="backupHistorico" class="history" style="list-style:none; margin:0; padding:0;">
+              <li class="muted">Nenhum backup realizado.</li>
+            </ul>
+          </div>
+
+          <hr style="border:none; border-top:1px solid var(--border, #e5e7eb); margin:18px 0;" />
+
+          <!-- Restauração -->
+          <div style="font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; margin-bottom:10px;">Restaurar backup</div>
           <div class="row two">
             <div>
-              <label for="importarDados">Importar (cole um JSON exportado)</label>
-              <textarea id="importarDados" placeholder="Cole aqui o JSON..."></textarea>
+              <label for="arquivoRestore">Selecionar arquivo de backup (.db)</label>
+              <input type="file" id="arquivoRestore" accept=".db,.json" />
+              <div id="restorePreview" class="muted" style="font-size:12px; margin-top:8px;"></div>
               <div class="actions" style="margin-top:12px;">
-                <button type="button" id="importarBtn">Importar</button>
-                <button type="button" class="secondary" id="downloadBackupBtn">Baixar backup JSON</button>
+                <button type="button" class="secondary" id="validarRestoreBtn">🔍 Validar arquivo</button>
+                <button type="button" class="danger" id="restaurarBtn" disabled>♻️ Restaurar backup</button>
               </div>
             </div>
 
             <div>
-              <label>Reset</label>
-              <div class="empty" style="margin-top:0; padding-top:0;">Vai apagar alunos, livros e empréstimos cadastrados no sistema.</div>
-              <div class="actions" style="margin-top:12px;">
-                <button type="button" class="danger" id="resetBtn">Apagar tudo</button>
+              <label>Backups internos disponíveis</label>
+              <ul id="backupInternos" class="history" style="list-style:none; margin:0; padding:0;">
+                <li class="muted">Nenhum backup interno.</li>
+              </ul>
+              <div class="muted" style="font-size:12px; margin-top:8px;">
+                Um backup de segurança (pre-restore) é criado automaticamente antes de qualquer restauração.
               </div>
-              <div class="empty" style="margin-top:12px; padding-top:0;">Dica: exporte antes de resetar.</div>
+            </div>
+          </div>
+
+          <hr style="border:none; border-top:1px solid var(--border, #e5e7eb); margin:18px 0;" />
+
+          <!-- Importar JSON antigo / download / reset -->
+          <div class="row two">
+            <div>
+              <label for="importarDados">Importar dados de um backup JSON (modo antigo — adiciona, não substitui)</label>
+              <textarea id="importarDados" placeholder="Cole aqui o JSON..."></textarea>
+              <div class="actions" style="margin-top:12px;">
+                <button type="button" id="importarBtn">Importar</button>
+                <button type="button" class="secondary" id="downloadBackupBtn">⬇️ Baixar backup JSON</button>
+              </div>
+            </div>
+
+            <div>
+              <label>Zona de risco</label>
+              <div class="empty" style="margin-top:0; padding-top:0;">Apaga alunos, livros e empréstimos cadastrados. Faça um backup antes.</div>
+              <div class="actions" style="margin-top:12px;">
+                <button type="button" class="danger" id="resetBtn">🗑️ Apagar tudo</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2626,7 +2694,31 @@
     </div>
   </div>
 
-  <!-- Modal: Central de Notificações de Prazos -->
+   <!-- Modal: Confirmar Restauração de Backup -->
+  <div class="modal-backdrop" id="modalConfirmarRestore" role="dialog" aria-modal="true">
+     <div class="modal-dialog">
+       <div class="modal-header" style="background: linear-gradient(180deg, #fef2f2, #fff);">
+         <h3 style="color: var(--danger);">♻️ Confirmar Restauração</h3>
+         <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarRestore">&times;</button>
+       </div>
+       <div class="modal-body">
+         <p style="margin: 0 0 12px; font-size: 14px; line-height: 1.6; color: #1f2937;">
+           Restaurar este backup substituirá os dados atuais da biblioteca.<br/>
+           <strong>Deseja continuar?</strong>
+         </p>
+         <div id="restoreInfo" style="background:#f8fafc; border:1px solid #e5e7eb; border-radius:12px; padding:14px; font-size:13px; color:#334155;"></div>
+         <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 12px; margin-top:12px; font-size: 13px; color: #92400e;">
+           Um <strong>backup de segurança (pre-restore)</strong> do estado atual será criado automaticamente antes de restaurar.
+         </div>
+       </div>
+       <div class="modal-footer" style="justify-content: flex-end; gap:8px;">
+         <button type="button" class="secondary" data-close-modal="#modalConfirmarRestore">Cancelar</button>
+         <button type="button" class="danger" id="confirmarRestoreBtn">Restaurar backup</button>
+       </div>
+     </div>
+  </div>
+
+   <!-- Modal: Central de Notificações de Prazos -->
   <div class="modal-backdrop" id="modalNotificacoes" role="dialog" aria-modal="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-header">

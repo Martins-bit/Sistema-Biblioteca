@@ -2135,6 +2135,262 @@ function renderHistoricoAtividades() {
 
 // ---------------- Backup ----------------
 
+// Formata bytes em algo legível (ex.: 2,4 MB).
+function formatarTamanho(bytes) {
+  if (!bytes && bytes !== 0) return '—';
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${kb.toFixed(0)} KB`;
+  return `${(kb / 1024).toFixed(1).replace('.', ',')} MB`;
+}
+
+// "14/09/2026 às 19:15"
+function formatarDataHora(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  const data = d.toLocaleDateString('pt-BR');
+  const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${data} às ${hora}`;
+}
+
+// "14/09/2026 19:15 — 2,4 MB"
+function rotuloBackup(b) {
+  const d = new Date(b.criadoEm);
+  const data = isNaN(d.getTime()) ? b.criadoEm : d.toLocaleDateString('pt-BR');
+  const hora = isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  return `${data} ${hora} — ${formatarTamanho(b.tamanho)}`;
+}
+
+function descricaoContagens(c) {
+  if (!c) return '';
+  return `${c.livros ?? '?'} livro(s) • ${c.alunos ?? '?'} aluno(s) • ${c.emprestimos ?? '?'} empréstimo(s)`;
+}
+
+async function carregarStatusBackup() {
+  try {
+    const st = await api('/api/backup/status');
+    // Último backup
+    if (st.ultimoBackup) {
+      $('#backupUltimo').textContent = formatarDataHora(st.ultimoBackup.criadoEm);
+      const detalhe = descricaoContagens(st.ultimoBackup.contagens);
+      $('#backupUltimoDetalhe').textContent = `${formatarTamanho(st.ultimoBackup.tamanho)}${detalhe ? ' • ' + detalhe : ''}`;
+    } else {
+      $('#backupUltimo').textContent = 'Nenhum backup realizado.';
+      $('#backupUltimoDetalhe').textContent = '';
+    }
+    // Config automática
+    const cfg = st.config || {};
+    if ($('#backupAutomatico')) $('#backupAutomatico').checked = !!cfg.automatico;
+    if ($('#backupFrequencia')) $('#backupFrequencia').value = cfg.frequencia || 'diario';
+    if ($('#backupRetencaoInfo')) {
+      $('#backupRetencaoInfo').textContent =
+        `Backups automáticos são mantidos até o limite de ${st.retencao || 10}; os manuais nunca são apagados automaticamente.`;
+    }
+  } catch (err) {
+    $('#backupUltimo').textContent = 'Não foi possível carregar o status.';
+  }
+  await carregarHistoricoBackup();
+}
+
+async function carregarHistoricoBackup() {
+  try {
+    const { backups } = await api('/api/backup/lista');
+    const lista = backups || [];
+    // Histórico geral (sem pre-restore para não poluir a visão)
+    const historico = lista.filter(b => b.tipo !== 'pre-restore');
+    const ulHist = $('#backupHistorico');
+    if (ulHist) {
+      ulHist.innerHTML = historico.length
+        ? historico.map(b => {
+            const d = new Date(b.criadoEm);
+            const data = isNaN(d.getTime()) ? b.criadoEm : d.toLocaleDateString('pt-BR');
+            const hora = isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            const tipo = b.tipo === 'automatico' ? 'automático' : 'manual';
+            return `<li style="padding:6px 0; border-bottom:1px solid var(--border,#eef2f7);">
+              ${data} ${hora} — ${formatarTamanho(b.tamanho)} <span class="muted">(${tipo})</span>
+            </li>`;
+          }).join('')
+        : '<li class="muted">Nenhum backup realizado.</li>';
+    }
+
+    // Backups internos restauráveis (formato .db, exceto pre-restore)
+    const internos = lista.filter(b => b.tipo !== 'pre-restore' && /\.db$/i.test(b.arquivo));
+    const ulInt = $('#backupInternos');
+    if (ulInt) {
+      ulInt.innerHTML = internos.length
+        ? internos.map(b => `<li style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border,#eef2f7);">
+            <span>${rotuloBackup(b)}</span>
+            <span style="display:flex; gap:6px;">
+              <button type="button" class="secondary" data-baixar-backup="${b.arquivo}" style="padding:4px 8px; font-size:12px;">⬇️</button>
+              <button type="button" class="secondary" data-restaurar-backup="${b.arquivo}" style="padding:4px 8px; font-size:12px;">♻️</button>
+            </span>
+          </li>`).join('')
+        : '<li class="muted">Nenhum backup interno.</li>';
+    }
+  } catch (err) {
+    console.error('Falha ao carregar histórico de backups:', err);
+  }
+}
+
+async function criarBackupAgora() {
+  const btn = $('#criarBackupBtn');
+  const original = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Criando backup...'; }
+  try {
+    const r = await api('/api/backup/criar', { method: 'POST' });
+    toast(r.message || 'Backup concluído com sucesso.');
+    await carregarStatusBackup();
+  } catch (err) {
+    toast(err.message || 'Não foi possível criar o backup.', 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = original; }
+  }
+}
+
+async function salvarConfigBackup() {
+  try {
+    const automatico = $('#backupAutomatico').checked;
+    const frequencia = $('#backupFrequencia').value;
+    const payload = { automatico, frequencia };
+    await api('/api/backup/config', { method: 'PUT', body: payload });
+    toast('Configurações de backup salvas.');
+    await carregarStatusBackup();
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+async function baixarArquivoBackup(nome) {
+  try {
+    const res = await fetch(`/api/backup/arquivo/${encodeURIComponent(nome)}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('Não foi possível baixar o arquivo.');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nome;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Backup baixado com sucesso!');
+  } catch (err) {
+    toast(err.message, 'erro');
+  }
+}
+
+// -------- Restauração --------
+let arquivoRestoreSelecionado = null;  // File enviado
+let backupInternoSelecionado = null;   // nome de backup interno
+let restoreValidado = null;            // resultado da validação
+function resetRestoreSelecao() {
+  arquivoRestoreSelecionado = null;
+  backupInternoSelecionado = null;
+  restoreValidado = null;
+  if ($('#restorePreview')) $('#restorePreview').textContent = '';
+  if ($('#restaurarBtn')) $('#restaurarBtn').disabled = true;
+}
+
+async function validarArquivoRestore() {
+  const input = $('#arquivoRestore');
+  const file = input?.files?.[0];
+  if (!file) { toast('Selecione um arquivo de backup primeiro.', 'aviso'); return; }
+  arquivoRestoreSelecionado = file;
+  backupInternoSelecionado = null;
+  await enviarValidacao(file);
+}
+
+async function enviarValidacao(file) {
+  const preview = $('#restorePreview');
+  preview.textContent = 'Validando arquivo...';
+  $('#restaurarBtn').disabled = true;
+  try {
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    const res = await fetch('/api/backup/validar', { method: 'POST', credentials: 'include', body: fd });
+    const data = await res.json();
+    if (!res.ok || !data.valido) {
+      restoreValidado = null;
+      preview.textContent = data.error || 'Este arquivo não é um backup válido do Sistema da Biblioteca.';
+      preview.style.color = 'var(--danger)';
+      return;
+    }
+    restoreValidado = data;
+    preview.style.color = 'var(--muted)';
+    preview.textContent =
+      `✔ Backup válido • ${formatarTamanho(data.tamanho)}${data.contagens ? ' • ' + descricaoContagens(data.contagens) : ''}`;
+    $('#restaurarBtn').disabled = false;
+  } catch (err) {
+    preview.textContent = 'Falha ao validar o arquivo.';
+    preview.style.color = 'var(--danger)';
+  }
+}
+
+// Seleciona um backup interno para restaurar (valida antes de habilitar).
+async function selecionarBackupInterno(nome) {
+  backupInternoSelecionado = nome;
+  arquivoRestoreSelecionado = null;
+  const preview = $('#restorePreview');
+  preview.textContent = 'Carregando backup interno...';
+  preview.style.color = 'var(--muted)';
+  try {
+    const res = await fetch(`/api/backup/arquivo/${encodeURIComponent(nome)}`, { credentials: 'include' });
+    if (!res.ok) throw new Error('não encontrado');
+    const blob = await res.blob();
+    const file = new File([blob], nome, { type: 'application/octet-stream' });
+    await enviarValidacao(file);
+  } catch (err) {
+    preview.textContent = 'Não foi possível carregar o backup interno.';
+    preview.style.color = 'var(--danger)';
+  }
+}
+
+function abrirModalRestore() {
+  if (!restoreValidado) { toast('Valide um arquivo de backup antes de restaurar.', 'aviso'); return; }
+  const info = $('#restoreInfo');
+  if (info) {
+    info.innerHTML =
+      `<strong>Arquivo:</strong> ${restoreValidado.nome}<br/>` +
+      `<strong>Tamanho:</strong> ${formatarTamanho(restoreValidado.tamanho)}<br/>` +
+      (restoreValidado.contagens ? `<strong>Conteúdo:</strong> ${descricaoContagens(restoreValidado.contagens)}` : '');
+  }
+  abrirModal('#modalConfirmarRestore');
+}
+
+async function confirmarRestore() {
+  const btn = $('#confirmarRestoreBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Restaurando...'; }
+  try {
+    let res;
+    if (arquivoRestoreSelecionado) {
+      const fd = new FormData();
+      fd.append('arquivo', arquivoRestoreSelecionado);
+      fd.append('confirmar', '1');
+      res = await fetch('/api/backup/restaurar', { method: 'POST', credentials: 'include', body: fd });
+    } else if (backupInternoSelecionado) {
+      res = await fetch('/api/backup/restaurar', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome: backupInternoSelecionado, confirmar: '1' })
+      });
+    } else {
+      toast('Nenhum backup selecionado.', 'aviso');
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || 'Não foi possível restaurar o backup.');
+    fecharModal('#modalConfirmarRestore');
+    resetRestoreSelecao();
+    if ($('#arquivoRestore')) $('#arquivoRestore').value = '';
+    toast(`Backup restaurado com sucesso! Segurança: ${data.preRestore}`);
+    await recarregarTudo();
+    await carregarStatusBackup();
+  } catch (err) {
+    toast(err.message, 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Restaurar backup'; }
+  }
+}
+
 async function baixarBackup() {
   try {
     const data = await api('/api/backup');
@@ -2178,19 +2434,22 @@ async function abrirModalReset() {
 }
 
 async function resetarTudo(comBackup) {
+  // Fazer backup NUNCA apaga sozinho: aqui o backup é uma ação SEPARADA e
+  // explícita, e a exclusão só acontece depois, com confirmação própria.
   if (comBackup) {
     try {
-      const data = await api('/api/backup');
-      baixarJSON(`biblioteca-backup-${hojeISO()}.json`, data);
+      const r = await api('/api/backup/criar', { method: 'POST' });
+      toast(r.message || 'Backup criado. Prosseguindo com a exclusão...');
     } catch (err) {
-      if (!confirm('Falha ao gerar o backup. Apagar mesmo assim?')) return;
+      if (!confirm('Não foi possível criar o backup. Apagar mesmo assim?')) return;
     }
   }
   try {
-    await api('/api/backup', { method: 'DELETE' });
+    await api('/api/backup?confirmar=1', { method: 'DELETE' });
     fecharModal('#modalConfirmarReset');
     toast('Todos os dados foram apagados.');
     await recarregarTudo();
+    await carregarStatusBackup();
   } catch (err) {
     toast(err.message, 'erro');
   }
@@ -2614,6 +2873,25 @@ function bindEventos() {
   $('#btnResetSemBackup').addEventListener('click', () => resetarTudo(false));
   $('#btnResetComBackup').addEventListener('click', () => resetarTudo(true));
 
+  // Novo painel de backup
+  if ($('#criarBackupBtn')) $('#criarBackupBtn').addEventListener('click', criarBackupAgora);
+  if ($('#backupAutomatico')) $('#backupAutomatico').addEventListener('change', salvarConfigBackup);
+  if ($('#backupFrequencia')) $('#backupFrequencia').addEventListener('change', salvarConfigBackup);
+  if ($('#arquivoRestore')) $('#arquivoRestore').addEventListener('change', validarArquivoRestore);
+  if ($('#validarRestoreBtn')) $('#validarRestoreBtn').addEventListener('click', validarArquivoRestore);
+  if ($('#restaurarBtn')) $('#restaurarBtn').addEventListener('click', abrirModalRestore);
+  if ($('#confirmarRestoreBtn')) $('#confirmarRestoreBtn').addEventListener('click', confirmarRestore);
+
+  // Delegação para botões dos backups internos
+  if ($('#backupInternos')) {
+    $('#backupInternos').addEventListener('click', (e) => {
+      const btnBaixar = e.target.closest('[data-baixar-backup]');
+      const btnRestaurar = e.target.closest('[data-restaurar-backup]');
+      if (btnBaixar) baixarArquivoBackup(btnBaixar.getAttribute('data-baixar-backup'));
+      if (btnRestaurar) selecionarBackupInterno(btnRestaurar.getAttribute('data-restaurar-backup'));
+    });
+  }
+
   // ----- Ranking -----
   $('#rankingPeriodo').addEventListener('change', (e) => {
     const personalizado = e.target.value === 'personalizado';
@@ -2744,6 +3022,9 @@ async function init() {
   }
 
   await carregarRelatoriosSalvos();
+
+  // Painel de backup (status, histórico, config)
+  try { await carregarStatusBackup(); } catch (e) { console.error('[init] falha no painel de backup:', e); }
 }
 
 init().catch(err => {

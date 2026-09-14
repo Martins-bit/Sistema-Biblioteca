@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 
-require('./db'); // garante que o banco e o usuário admin padrão sejam criados
+const db = require('./db'); // garante que o banco e o usuário admin padrão sejam criados
 
 const requireAuth = require('./middleware/requireAuth');
 const authRoutes = require('./routes/auth');
@@ -117,3 +117,8 @@ app.use(express.static(path.join(__dirname, 'public'), {
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n📚 Sistema da Biblioteca rodando em http://localhost:${PORT}\n`);
 });
+
+// Backup automático: verifica na inicialização e periodicamente se o intervalo
+// (diário/semanal) venceu. Não usa setInterval ingênuo e evita concorrência com
+// backups manuais e restaurações (ver services/backupScheduler.js).
+require('./services/backupScheduler').iniciar(db);

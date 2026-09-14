@@ -14,6 +14,8 @@ cookies.txt
 # SQLite temporário
 *.db-shm
 *.db-wal
+# Backups reais (nunca versionar)
+backups/
 
 # Arquivos temporários de testes
 cookies.txt
