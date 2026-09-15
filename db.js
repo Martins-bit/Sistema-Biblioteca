@@ -1,6 +1,5 @@
 const Database = require('better-sqlite3');
 const path = require('path');
-const bcryptjs = require('bcryptjs');
 
 console.log('Inicializando banco de dados SQLite...');
 
@@ -111,6 +110,65 @@ try {
     db.exec("ALTER TABLE users ADD COLUMN email TEXT");
   } catch (e) { /* Coluna já existe */ }
 
+  // ---- Migration (Etapa 5): nome de exibição, status e timestamps do usuário ----
+  // Perfis individuais: cada bibliotecária tem nome/e-mail/senha próprios.
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN nome TEXT");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN ativo INTEGER NOT NULL DEFAULT 1");
+  } catch (e) { /* Coluna já existe */ }
+  try {
+    db.exec("ALTER TABLE users ADD COLUMN atualizado_em DATETIME");
+  } catch (e) { /* Coluna já existe */ }
+
+  // Índice único de e-mail (case-insensitive). Criado após a coluna existir.
+  // Usa COLLATE NOCASE para impedir duplicidade independente de maiúsculas.
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_unique ON users(email COLLATE NOCASE)");
+
+  // ---- Etapa 5: preferências individuais por usuário (tema/cor principal) ----
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      cor_principal TEXT,
+      tema TEXT,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em DATETIME,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )
+  `);
+
+  // ---- Migração (correção Etapa 5): recupera as opções de personalização ----
+  // que existiam ANTES da Etapa 5 (paleta, cores personalizadas, plano de fundo,
+  // opacidade/desfoque e identidade). Agora persistidas POR USUÁRIO no banco.
+  // Todas ADITIVAS e idempotentes (try/catch em coluna já existente).
+  const colunasPref = [
+    'paleta TEXT',                          // chave da paleta rápida (ex.: 'azul')
+    'cor_destaque TEXT',                    // hex da cor de destaque
+    'cor_fundo TEXT',                       // hex da cor de fundo da tela
+    'cor_card TEXT',                        // hex da cor dos cards
+    'wallpaper TEXT',                       // 'none' | chave de gradiente | 'custom'
+    'wallpaper_imagem TEXT',                // dataURL da imagem enviada (base64)
+    'wallpaper_opacidade INTEGER',          // 30..100
+    'wallpaper_blur INTEGER',               // 0..20
+    'biblioteca_nome TEXT',                 // identidade: nome da biblioteca
+    'responsavel_nome TEXT'                 // identidade: nome da responsável
+  ];
+  for (const col of colunasPref) {
+    try { db.exec(`ALTER TABLE user_preferences ADD COLUMN ${col}`); } catch (e) { /* já existe */ }
+  }
+
+  // ---- Etapa 5: auditoria leve (quem registrou ações compartilhadas) ----
+  // NÃO separa os dados por usuário — apenas registra autoria para histórico.
+  for (const tabela of ['emprestimos', 'livros', 'alunos']) {
+    for (const coluna of ['criadoPorUserId', 'atualizadoPorUserId']) {
+      try {
+        db.exec(`ALTER TABLE ${tabela} ADD COLUMN ${coluna} INTEGER`);
+      } catch (e) { /* Coluna já existe */ }
+    }
+  }
+
   // ---- Tabela de bloqueios de alunos (nota < 3,0 => bloqueio de 21 dias) ----
   db.exec(`
     CREATE TABLE IF NOT EXISTS bloqueios (
@@ -151,31 +209,36 @@ try {
 
   console.log('Tabelas criadas ou já existiam.');
 
-  // Criar usuário admin padrão se não existir
-  const adminUsername = 'admin';
-  const adminPassword = '1234'; // Senha padrão mencionada no README
+  // ---- Etapa 5: NÃO criamos mais usuário com credenciais padrão (admin/1234) ----
+  // Contas reais (Bárbara, Natali, ...) são criadas por fluxo administrativo:
+  //   node scripts/create-user.js
+  //
+  // Aqui apenas MIGRAMOS bases antigas de forma não destrutiva:
+  //  - preenche `nome` a partir do username quando estiver vazio;
+  //  - garante um e-mail para contas antigas que não tinham (sem inventar
+  //    credenciais novas e sem tocar na senha existente).
+  const totalUsers = db.prepare('SELECT COUNT(*) AS c FROM users').get().c;
 
-  // Verificar se o usuário admin já existe
-  const adminCheck = db.prepare('SELECT id FROM users WHERE username = ?').get(adminUsername);
-
-  if (!adminCheck) {
-    // Criar hash da senha
-    const saltRounds = 10;
-    const passwordHash = bcryptjs.hashSync(adminPassword, saltRounds);
-
-    // Inserir usuário admin
-    const insertAdmin = db.prepare(
-      'INSERT INTO users (username, password_hash, email) VALUES (?, ?, ?)'
-    ).run(adminUsername, passwordHash, 'admin@biblioteca.local');
-
-    console.log(`Usuário admin criado com ID: ${insertAdmin.lastInsertRowid}`);
+  if (totalUsers === 0) {
+    console.log('⚠️  Nenhum usuário cadastrado. Crie uma conta com: node scripts/create-user.js');
   } else {
-    console.log('Usuário admin já existe.');
-    // Garante que o admin tenha um e-mail cadastrado (migration para bases antigas)
-    const adminRow = db.prepare('SELECT id, email FROM users WHERE username = ?').get(adminUsername);
-    if (adminRow && !adminRow.email) {
-      db.prepare('UPDATE users SET email = ? WHERE id = ?').run('admin@biblioteca.local', adminRow.id);
-      console.log('E-mail padrão vinculado ao admin: admin@biblioteca.local');
+    // Preenche `nome` vazio a partir do username (compatibilidade suave)
+    db.prepare(
+      "UPDATE users SET nome = username WHERE (nome IS NULL OR nome = '') AND username IS NOT NULL"
+    ).run();
+
+    // Contas antigas sem e-mail: usa username@biblioteca.local só para não
+    // deixar o e-mail nulo (o e-mail real deve ser definido pelo admin depois).
+    const semEmail = db.prepare("SELECT id, username FROM users WHERE email IS NULL OR email = ''").all();
+    const setEmail = db.prepare('UPDATE users SET email = ? WHERE id = ?');
+    for (const u of semEmail) {
+      const base = String(u.username || `usuario${u.id}`).toLowerCase().replace(/[^a-z0-9._-]/g, '');
+      try {
+        setEmail.run(`${base}@biblioteca.local`, u.id);
+        console.log(`E-mail provisório vinculado ao usuário ${u.id}: ${base}@biblioteca.local`);
+      } catch (e) {
+        console.error(`Não foi possível vincular e-mail provisório ao usuário ${u.id}:`, e.message);
+      }
     }
   }
 

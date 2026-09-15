@@ -6,6 +6,8 @@ node_modules/
 .DS_Store
 Thumbs.db
 .env
+# Secret de sessão gerado localmente (NUNCA versionar)
+.session-secret
 biblioteca.db-shm
 biblioteca.db-wal
 

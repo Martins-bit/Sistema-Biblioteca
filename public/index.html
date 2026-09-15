@@ -561,6 +561,42 @@
     /* Fade in */
     .card, .stat-card, .topbar { animation: fadeIn 520ms ease both; }
 
+    /* ============ Etapa 5: Tema escuro (preferência individual) ============ */
+    html[data-tema="escuro"] {
+      --bg: #0B1220;
+      --card: #0F172A;
+      --border: #1E293B;
+      --text: #E2E8F0;
+      --muted: #94A3B8;
+      color-scheme: dark;
+    }
+    html[data-tema="escuro"] body { background: var(--bg); }
+    html[data-tema="escuro"] input,
+    html[data-tema="escuro"] select,
+    html[data-tema="escuro"] textarea {
+      background: #0B1220;
+      color: var(--text);
+      border-color: var(--border);
+    }
+    html[data-tema="escuro"] .card,
+    html[data-tema="escuro"] .stat-card,
+    html[data-tema="escuro"] .topbar,
+    html[data-tema="escuro"] .sidebar { background: var(--card); }
+
+    /* ============ Etapa 5: Meu Perfil ============ */
+    .perfil-resumo { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+    .perfil-resumo > div { background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+    .perfil-resumo .muted { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; font-weight: 800; }
+    .perfil-resumo strong { font-size: 15px; }
+    .perfil-bloco { margin-bottom: 20px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+    .perfil-bloco h4 { margin: 0 0 6px; font-size: 14px; font-weight: 900; }
+    .perfil-bloco .input-wrap { position: relative; }
+    .toggle-senha-perfil { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: 0; cursor: pointer; font-size: 15px; padding: 6px 8px; border-radius: 8px; color: var(--muted); }
+    .toggle-senha-perfil:hover { background: rgba(148,163,184,.18); }
+    .pref-preview { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+    .pref-swatch { width: 26px; height: 26px; border-radius: 8px; background: var(--primary); border: 1px solid var(--border); display: inline-block; }
+    button.avatar { cursor: pointer; background: transparent; border: 0; font: inherit; }
+
     /* Mobile */
     @media (max-width: 980px) {
       .app { grid-template-columns: 1fr; }
@@ -1858,7 +1894,8 @@
         <a class="nav-item" href="#" data-nav="emprestimos">🔄 Empréstimos</a>
         <a class="nav-item" href="#" data-nav="relatorios">📊 Relatórios</a>
         <a class="nav-item" href="#" data-nav="ranking">🏆 Ranking</a>
-        <a class="nav-item" href="#" id="navPersonalizarTema" style="color: var(--primary-dark); font-weight: 900;">🎨 Personalizar Cores & Fundo</a>
+        <a class="nav-item" href="#" id="navMeuPerfil">👤 Meu Perfil</a>
+        <a class="nav-item" href="#" id="navPersonalizarTema" style="color: var(--primary-dark); font-weight: 900;">🎨 Personalização</a>
       </nav>
 
       <div class="divider"></div>
@@ -1898,10 +1935,10 @@
             <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
           </button>
 
-          <div class="avatar" aria-label="Usuário">
+          <button class="avatar" id="perfilBtn" type="button" aria-label="Meu Perfil" title="Meu Perfil">
             <div class="dot"></div>
             <div class="name">Bibliotecária</div>
-          </div>
+          </button>
         </div>
       </div>
 
@@ -3072,141 +3109,235 @@
     </div>
   </div>
 
-  <!-- Modal: Personalização de Cores, Fundo e Identidade Visual -->
+   <!-- Modal: Personalização (preferências individuais salvas no servidor) -->
   <div class="modal-backdrop" id="modalPersonalizacao" role="dialog" aria-modal="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
-        <h3>🎨 Personalizar Cores, Fotos e Plano de Fundo</h3>
-        <button type="button" class="modal-close-btn" data-close-modal="#modalPersonalizacao">&times;</button>
-      </div>
-      <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
-
-        <div style="margin-bottom: 22px;">
-          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-            🎨 1. Escolha uma Paleta de Cores Rápida
-          </label>
-          <div class="theme-palettes-grid" id="themePalettesContainer">
-            <!-- Renderizado dinamicamente pelo JS -->
-          </div>
+      <div class="modal-dialog modal-lg">
+        <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
+          <h3>🎨 Personalizar Cores, Fotos e Plano de Fundo</h3>
+          <button type="button" class="modal-close-btn" data-close-modal="#modalPersonalizacao">&times;</button>
         </div>
+        <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
+          <p class="muted" style="margin-top:0; font-size:12.5px;">
+            Suas preferências são salvas no seu perfil e usadas apenas na sua conta.
+          </p>
 
-        <div style="margin-bottom: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px;">
-          <label style="font-size: 13px; font-weight: 900; margin-bottom: 10px; display: block;">
-            ✨ Ou defina suas próprias cores personalizadas:
-          </label>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
-            <div>
-              <label for="themeColorPrimary" style="font-size: 11px;">Cor de Destaque / Botões:</label>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="color" id="themeColorPrimary" value="#22C55E" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
-                <span id="themeColorPrimaryHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#22C55E</span>
-              </div>
-            </div>
-            <div>
-              <label for="themeColorBg" style="font-size: 11px;">Cor de Fundo da Tela:</label>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="color" id="themeColorBg" value="#F8FAFC" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
-                <span id="themeColorBgHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#F8FAFC</span>
-              </div>
-            </div>
-            <div>
-              <label for="themeColorCard" style="font-size: 11px;">Cor dos Blocos / Cards:</label>
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="color" id="themeColorCard" value="#FFFFFF" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
-                <span id="themeColorCardHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#FFFFFF</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-bottom: 22px;">
-          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-            🖼️ 2. Plano de Fundo / Papel de Parede da Biblioteca
-          </label>
-
-          <div class="theme-wallpapers-grid" id="themeWallpapersContainer">
-            <!-- Renderizado dinamicamente pelo JS -->
-          </div>
-
-          <div style="border: 2px dashed var(--border); border-radius: 14px; padding: 14px; text-align: center; background: var(--card); margin-top: 10px;">
-            <div style="font-size: 26px; margin-bottom: 4px;">📷</div>
-            <label for="themeWallpaperFileInput" style="font-size: 13px; font-weight: 800; cursor: pointer; color: var(--primary-dark); display: block; margin-bottom: 4px;">
-              Clique aqui para enviar uma Foto ou Imagem do seu computador / celular
+          <!-- 1. Paletas rápidas -->
+          <div style="margin-bottom: 22px;">
+            <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+              🎨 1. Escolha uma Paleta de Cores Rápida
             </label>
-            <input type="file" id="themeWallpaperFileInput" accept="image/*" style="display: none;" />
-            <small class="muted">Formatos: JPG, PNG, WEBP (será salvo automaticamente no seu navegador)</small>
+            <div class="theme-palettes-grid" id="themePalettesContainer">
+              <!-- Renderizado dinamicamente pelo JS -->
+            </div>
           </div>
 
-          <div id="themeBgControlsContainer" style="margin-top: 12px; display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
+          <!-- Cores personalizadas -->
+          <div style="margin-bottom: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px;">
+            <label style="font-size: 13px; font-weight: 900; margin-bottom: 10px; display: block;">
+              ✨ Ou defina suas próprias cores personalizadas:
+            </label>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+              <div>
+                <label for="themeColorPrimary" style="font-size: 11px;">Cor de Destaque / Botões:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="color" id="themeColorPrimary" value="#22C55E" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                  <span id="themeColorPrimaryHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#22C55E</span>
+                </div>
+              </div>
+              <div>
+                <label for="themeColorBg" style="font-size: 11px;">Cor de Fundo da Tela:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="color" id="themeColorBg" value="#F8FAFC" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                  <span id="themeColorBgHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#F8FAFC</span>
+                </div>
+              </div>
+              <div>
+                <label for="themeColorCard" style="font-size: 11px;">Cor dos Blocos / Cards:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="color" id="themeColorCard" value="#FFFFFF" style="width: 44px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer;" />
+                  <span id="themeColorCardHex" style="font-size: 12px; font-family: monospace; font-weight: 700;">#FFFFFF</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Plano de fundo -->
+          <div style="margin-bottom: 22px;">
+            <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+              🖼️ 2. Plano de Fundo / Papel de Parede da Biblioteca
+            </label>
+
+            <div class="theme-wallpapers-grid" id="themeWallpapersContainer">
+              <!-- Renderizado dinamicamente pelo JS -->
+            </div>
+
+            <div style="border: 2px dashed var(--border); border-radius: 14px; padding: 14px; text-align: center; background: var(--card); margin-top: 10px;">
+              <div style="font-size: 26px; margin-bottom: 4px;">📷</div>
+              <label for="themeWallpaperFileInput" style="font-size: 13px; font-weight: 800; cursor: pointer; color: var(--primary-dark); display: block; margin-bottom: 4px;">
+                Clique aqui para enviar uma Foto ou Imagem do seu computador / celular
+              </label>
+              <input type="file" id="themeWallpaperFileInput" accept="image/*" style="display: none;" />
+              <small class="muted">Formatos: JPG, PNG, WEBP (salvo no seu perfil)</small>
+            </div>
+
+            <div id="themeBgControlsContainer" style="margin-top: 12px; display: none; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 12px;">
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div>
+                  <label for="themeBgOpacity" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                    <span>Opacidade dos Blocos (Legibilidade)</span>
+                    <span id="themeBgOpacityVal">85%</span>
+                  </label>
+                  <input type="range" id="themeBgOpacity" min="30" max="100" value="85" style="width: 100%;" />
+                </div>
+                <div>
+                  <label for="themeBgBlur" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                    <span>Desfoque Suave da Imagem</span>
+                    <span id="themeBgBlurVal">0px</span>
+                  </label>
+                  <input type="range" id="themeBgBlur" min="0" max="20" value="0" style="width: 100%;" />
+                </div>
+              </div>
+              <button type="button" class="danger btn-small" id="btnRemoverFundo" style="margin-top: 10px;">
+                🗑️ Remover Imagem de Fundo (Voltar ao Fundo Liso)
+              </button>
+            </div>
+          </div>
+
+          <!-- Tema -->
+          <div style="margin-bottom: 22px;">
+            <label for="prefTema" style="font-size: 13px; font-weight: 900; margin-bottom: 8px; display: block;">🌗 Tema</label>
+            <select id="prefTema" style="height:44px;">
+              <option value="claro">☀️ Claro</option>
+              <option value="escuro">🌙 Escuro</option>
+              <option value="sistema">🖥️ Sistema</option>
+            </select>
+          </div>
+
+          <!-- 3. Identidade -->
+          <div>
+            <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
+              🏛️ 3. Identidade da sua Biblioteca
+            </label>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div>
-                <label for="themeBgOpacity" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>Opacidade dos Blocos (Legibilidade)</span>
-                  <span id="themeBgOpacityVal">85%</span>
-                </label>
-                <input type="range" id="themeBgOpacity" min="30" max="100" value="85" style="width: 100%;" />
+                <label for="themeLibraryName">Nome da Biblioteca:</label>
+                <input id="themeLibraryName" placeholder="Ex.: Sistema Biblioteca, Biblioteca Municipal..." maxlength="80" />
               </div>
               <div>
-                <label for="themeBgBlur" style="font-size: 11px; margin-bottom: 4px; display: flex; justify-content: space-between;">
-                  <span>Desfoque Suave da Imagem</span>
-                  <span id="themeBgBlurVal">0px</span>
-                </label>
-                <input type="range" id="themeBgBlur" min="0" max="20" value="0" style="width: 100%;" />
+                <label for="themeLibrarianName">Nome da Bibliotecária / Responsável:</label>
+                <input id="themeLibrarianName" placeholder="Ex.: Bibliotecária, Profª Mariana..." maxlength="80" />
               </div>
             </div>
-            <button type="button" class="danger btn-small" id="btnRemoverFundo" style="margin-top: 10px;">
-              🗑️ Remover Imagem de Fundo (Voltar ao Fundo Liso)
-            </button>
+          </div>
+
+          <!-- Cor principal (compatibilidade com o seletor simples da Etapa 5) -->
+          <div style="margin-top: 18px;">
+            <label for="prefCorPrincipal" style="font-size: 12px;">Cor principal (seletor rápido)</label>
+            <select id="prefCorPrincipal" style="height:40px;">
+              <option value="padrao">🟢 Padrão (verde)</option>
+              <option value="azul">🔵 Azul</option>
+              <option value="rosa">🩷 Rosa</option>
+              <option value="verde">🟢 Verde</option>
+              <option value="roxo">🟣 Roxo</option>
+            </select>
           </div>
         </div>
-
-        <div>
-          <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-            🏛️ 3. Identidade da sua Biblioteca
-          </label>
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div>
-              <label for="themeLibraryName">Nome da Biblioteca:</label>
-              <input id="themeLibraryName" placeholder="Ex.: Sistema Biblioteca, Biblioteca Municipal..." maxlength="60" />
-            </div>
-            <div>
-              <label for="themeLibrarianName">Nome da Bibliotecária / Responsável:</label>
-              <input id="themeLibrarianName" placeholder="Ex.: Bibliotecária, Profª Mariana..." maxlength="50" />
-            </div>
-          </div>
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button type="button" class="secondary" id="btnRestaurarTemaPadrao">🔄 Restaurar Padrão Original</button>
+          <button type="button" id="btnSalvarTema" style="background: var(--primary);">💾 Salvar e Fechar</button>
         </div>
-
       </div>
-      <div class="modal-footer" style="justify-content: space-between;">
-        <button type="button" class="secondary" id="btnRestaurarTemaPadrao">🔄 Restaurar Padrão Original</button>
-        <button type="button" id="btnSalvarTema" style="background: var(--primary);">💾 Salvar e Fechar</button>
-      </div>
-    </div>
   </div>
 
-  <!-- Modal: Confirmar Restauração do Tema Padrão -->
+   <!-- Modal: Confirmar Restauração do Tema Padrão -->
   <div class="modal-backdrop" id="modalConfirmarResetTema" role="dialog" aria-modal="true">
-    <div class="modal-dialog">
-      <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
-        <h3>🔄 Restaurar Visual Padrão</h3>
-        <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarResetTema">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div style="text-align: center; margin-bottom: 16px;">
-          <div style="font-size: 44px; margin-bottom: 8px;">🎨</div>
-          <h4 style="margin: 0 0 8px; font-size: 16px; font-weight: 900; color: var(--text);">
-            Deseja realmente restaurar as configurações visuais?
-          </h4>
-          <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-            Todas as personalizações de <strong>cores</strong>, <strong>papel de parede / foto de fundo</strong> e <strong>identidade da biblioteca</strong> voltarão para a configuração original de fábrica (Verde Esmeralda e fundo limpo).
-          </p>
+      <div class="modal-dialog">
+        <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
+          <h3>🔄 Restaurar Visual Padrão</h3>
+          <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarResetTema">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div style="text-align: center; margin-bottom: 16px;">
+            <div style="font-size: 44px; margin-bottom: 8px;">🎨</div>
+            <h4 style="margin: 0 0 8px; font-size: 16px; font-weight: 900; color: var(--text);">
+              Deseja realmente restaurar as configurações visuais?
+            </h4>
+            <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
+              Suas personalizações de <strong>cores</strong>, <strong>papel de parede / foto de fundo</strong> e <strong>identidade da biblioteca</strong> voltarão ao padrão.
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button type="button" class="secondary" data-close-modal="#modalConfirmarResetTema">Cancelar</button>
+          <button type="button" id="btnConfirmarRestauracaoTema" style="background: var(--primary);">✅ Sim, Restaurar Padrão</button>
         </div>
       </div>
-      <div class="modal-footer" style="justify-content: space-between;">
-        <button type="button" class="secondary" data-close-modal="#modalConfirmarResetTema">Cancelar</button>
-        <button type="button" id="btnConfirmarRestauracaoTema" style="background: var(--primary);">✅ Sim, Restaurar Padrão</button>
-      </div>
-    </div>
+  </div>
+
+   <!-- Modal: Meu Perfil -->
+  <div class="modal-backdrop" id="modalPerfil" role="dialog" aria-modal="true">
+     <div class="modal-dialog modal-lg">
+       <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
+         <h3>👤 Meu Perfil</h3>
+         <button type="button" class="modal-close-btn" data-close-modal="#modalPerfil">&times;</button>
+       </div>
+       <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
+
+         <div class="perfil-resumo">
+           <div><span class="muted">Nome</span><strong id="perfilNome">—</strong></div>
+           <div><span class="muted">E-mail</span><strong id="perfilEmail">—</strong></div>
+           <div><span class="muted">Conta</span><strong id="perfilStatus">—</strong></div>
+         </div>
+
+         <hr style="border:none;border-top:1px solid var(--border);margin:18px 0;" />
+
+         <!-- Alterar nome -->
+         <div class="perfil-bloco">
+           <h4>✏️ Alterar nome</h4>
+           <label for="perfilNomeInput">Nome de exibição</label>
+           <input id="perfilNomeInput" type="text" maxlength="80" placeholder="Seu nome" />
+           <div class="actions" style="margin-top:12px;">
+             <button type="button" id="salvarNomeBtn">Salvar nome</button>
+           </div>
+         </div>
+
+         <!-- Alterar e-mail -->
+         <div class="perfil-bloco">
+           <h4>📧 Alterar e-mail</h4>
+           <label for="perfilEmailNovo">Novo e-mail</label>
+           <input id="perfilEmailNovo" type="email" placeholder="novo.email@escola.exemplo" />
+           <label for="perfilEmailSenha">Senha atual (para confirmar)</label>
+           <div class="input-wrap">
+             <input id="perfilEmailSenha" type="password" placeholder="Sua senha atual" />
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilEmailSenha" aria-label="Mostrar ou ocultar senha">👁️</button>
+           </div>
+           <div class="actions" style="margin-top:12px;">
+             <button type="button" id="salvarEmailBtn">Salvar e-mail</button>
+           </div>
+         </div>
+
+         <!-- Alterar senha -->
+         <div class="perfil-bloco">
+           <h4>🔒 Alterar senha</h4>
+           <label for="perfilSenhaAtual">Senha atual</label>
+           <div class="input-wrap">
+             <input id="perfilSenhaAtual" type="password" placeholder="Senha atual" />
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaAtual" aria-label="Mostrar ou ocultar senha">👁️</button>
+           </div>
+           <label for="perfilSenhaNova">Nova senha</label>
+           <div class="input-wrap">
+             <input id="perfilSenhaNova" type="password" placeholder="Mínimo 8 caracteres, com letra e número" />
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaNova" aria-label="Mostrar ou ocultar senha">👁️</button>
+           </div>
+           <label for="perfilSenhaConfirmar">Confirmar nova senha</label>
+           <input id="perfilSenhaConfirmar" type="password" placeholder="Repita a nova senha" />
+           <div class="actions" style="margin-top:12px;">
+             <button type="button" id="salvarSenhaBtn">Salvar senha</button>
+           </div>
+         </div>
+
+       </div>
+     </div>
   </div>
 
   <!-- Toast (mantém id usado pelo JS) -->

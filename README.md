@@ -15,6 +15,8 @@ Sistema completo e moderno para gestão de biblioteca escolar, controle de acerv
 | 🔄 **Empréstimos** | Empréstimos/devoluções com estado de conservação do livro |
 | 📊 **Relatórios** | Relatórios reais com período, impressão/PDF, CSV e backup |
 | 🏆 **Ranking** | Alunos (mais leitores / melhor reputação) e salas/turmas |
+| 👤 **Meu Perfil** | Nome, e-mail, senha e status da própria conta |
+| 🎨 **Personalização** | Cor principal e tema, salvos por usuário |
 
 ## ⭐ Reputação dos alunos (1,0 a 5,0)
 
@@ -166,9 +168,68 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
    ```
    http://localhost:3000
    ```
-5. Credenciais de acesso:
-   - **Usuário:** `admin`
-   - **Senha:** `1234`
+5. **Crie as contas da equipe** (não há cadastro público nem credenciais padrão):
+   ```bash
+   node scripts/create-user.js
+   ```
+   O script pergunta **Nome**, **E-mail** e **Senha**, salva o hash e **nunca** exibe
+   nem grava a senha em texto puro. Repita para cada bibliotecária (ex.: Bárbara, Natali).
+6. Acesse com o **e-mail** e a **senha** cadastrados:
+   ```
+   http://localhost:3000
+   ```
+
+---
+
+## 🔐 Login, Perfis e Personalização (Etapa 5)
+
+### Login por e-mail
+- A tela de login usa **E-mail + Senha** (o login por usuário foi removido, assim como
+  qualquer credencial padrão e o botão *"Continuar com Google"*).
+- Qualquer falha de autenticação mostra sempre a **mesma mensagem** —
+  *"E-mail ou senha inválidos."* — para **não revelar** se o e-mail existe (evita
+  enumeração de usuários).
+- **Proteção contra força bruta:** até **10 tentativas por 15 minutos** por IP;
+  acima disso responde **HTTP 429**. Não bloqueia a conta.
+- A **sessão é regenerada** no login (evita *session fixation*) e o **logout**
+  destrói a sessão.
+
+### Perfis individuais, dados compartilhados
+- Cada usuária tem **nome, e-mail, senha e preferências próprias**.
+- Os **dados da biblioteca** (alunos, livros, empréstimos, devoluções, ranking,
+  relatórios, histórico, backup, estante) continuam **compartilhados** entre todos.
+- Em **Meu Perfil** (avatar no topo ou menu lateral) cada usuária pode:
+  - **Alterar o nome** de exibição;
+  - **Alterar o e-mail** (exige a senha atual; o e-mail é único);
+  - **Alterar a senha** (exige a senha atual; mínimo **8 caracteres**, com **1 letra
+    e 1 número**). Após trocar, a senha antiga deixa de funcionar.
+- Ninguém acessa o perfil de outra pessoa: as rotas identificam a usuária pela
+  **sessão** (`req.session.userId`), nunca por um `user_id` enviado pelo frontend.
+
+### Personalização individual
+- Em **🎨 Personalização** cada usuária escolhe:
+  - **Cor principal:** Padrão, Azul, Rosa, Verde, Roxo;
+  - **Tema:** Claro, Escuro ou Sistema.
+- As preferências ficam salvas **no banco, por usuário** (`user_preferences`).
+  O `localStorage` é usado apenas como **cache visual**. Assim, a cor da Bárbara
+  (ex.: azul) e a da Natali (ex.: rosa) **nunca se misturam**.
+
+### Cadastro de novas bibliotecárias
+- Não existe *"Criar conta"* na interface. Novas contas são criadas por um fluxo
+  administrativo local: **`node scripts/create-user.js`** (interativo ou com
+  `--nome/--email/--senha`).
+
+### Segurança web
+- **CSRF:** token por sessão, enviado no header `X-CSRF-Token` em todas as
+  requisições mutantes; ausente/errado ⇒ **HTTP 403**.
+- **SQL injection:** todas as consultas usam *prepared statements* do `better-sqlite3`.
+- **XSS:** a interface escapa o conteúdo; nomes com HTML/script são recusados.
+- **Headers (Helmet):** CSP, `X-Frame-Options`, `X-Content-Type-Options`, etc.,
+  configurados de forma compatível com o frontend (QR/ISBN/módulos locais).
+- **Senhas:** sempre com hash **bcrypt**; nunca retornadas em API nem gravadas em log.
+- **Sessão:** cookie `httpOnly`, `sameSite=lax`, `secure` em produção (HTTPS) e
+  **secret** fora do controle de versão (`.session-secret` no `.gitignore`,
+  ou `SESSION_SECRET` por variável de ambiente).
 
 ---
 
@@ -182,10 +243,12 @@ sistema-biblioteca/
 ├── services/
 │   ├── turmas.js          # Lista canônica de turmas + normalização
 │   ├── reputacao.js       # Cálculo das estrelas (reputação dos alunos)
+│   ├── auth.js            # Validação de e-mail/senha e hash (bcrypt)
 │   ├── backup.js          # Backups consistentes, validação, retenção, pre-restore
 │   └── backupScheduler.js # Agendador do backup automático (diário/semanal)
 ├── routes/
-│   ├── auth.js            # Login, logout e sessão
+│   ├── auth.js            # Login por e-mail, logout, sessão e token CSRF
+│   ├── me.js              # Perfil e preferências da própria usuária
 │   ├── alunos.js          # Alunos + reputação
 │   ├── livros.js          # Livros + capa
 │   ├── emprestimos.js     # Empréstimos + conservação
@@ -195,9 +258,12 @@ sistema-biblioteca/
 │   ├── relatorios.js      # Relatórios salvos
 │   └── backup.js          # Backup/restauração, histórico, config e limpeza
 ├── backups/               # Backups internos (.db) — NÃO versionado
-├── scripts/               # Harnesses de QA do backup (qa-backup*.js, qa-ui-backup*.mjs)
+├── scripts/
+│   ├── create-user.js     # Cadastro administrativo de bibliotecárias
+│   └── qa-*.js            # Harnesses de QA (auth, backup, sintaxe)
 ├── middleware/
-│   └── requireAuth.js     # Proteção de rotas autenticadas
+│   ├── requireAuth.js     # Proteção de rotas autenticadas
+│   └── csrf.js            # Proteção CSRF por token de sessão
 └── public/                # Front-end da aplicação
     ├── login.html         # Tela de login
     ├── index.html         # Aplicação principal (Dashboard, Prateleira, etc.)

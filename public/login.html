@@ -5,255 +5,300 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Login - Sistema Biblioteca</title>
   <style>
-    :root{
-      --primary:#22C55E;
-      --primary-dark:#15803D;
-      --bg:#F8FAFC;
-      --card:#FFFFFF;
-      --border:#E5E7EB;
-      --text:#1F2937;
-      --muted:#6B7280;
-      --danger:#ef4444;
-      --danger-dark:#dc2626;
-      --shadow-sm:0 1px 2px rgba(16,24,40,.06);
-      --shadow:0 10px 30px rgba(16,24,40,.10);
-      --radius:16px;
-    }
-    *{box-sizing:border-box;}
-    html,body{height:100%;}
-    body{
-      margin:0;
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
-      background:
-        radial-gradient(900px 500px at 10% -10%, rgba(34,197,94,.10), transparent 60%),
-        radial-gradient(800px 500px at 110% 110%, rgba(59,130,246,.08), transparent 60%),
-        var(--bg);
-      color:var(--text);
-      overflow-x:hidden;
-    }
-    .wrap{
-      min-height:100vh;
-      display:grid;
-      place-items:center;
-      padding:18px;
-    }
-    .card{
-      width:100%;
-      max-width:420px;
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--radius);
-      box-shadow:var(--shadow-sm);
-      padding:32px 28px 24px;
-      animation:fadeIn 300ms ease both;
-    }
-    @keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
-    .brand{
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      text-align:center;
-      gap:6px;
-      margin-bottom:24px;
-    }
-    .logo{
-      width:56px;height:56px;
-      border-radius:16px;
-      background:linear-gradient(135deg, var(--primary), var(--primary-dark));
-      display:grid;place-items:center;
-      font-size:28px;
-      box-shadow:0 8px 20px rgba(21,128,61,.25);
-      margin-bottom:6px;
-    }
-    .title{
-      font-weight:1000;
-      letter-spacing:-.02em;
-      font-size:20px;
-    }
-    .subtitle{color:var(--muted); font-weight:700; font-size:13px;}
+     :root{
+       --primary:#22C55E;
+       --primary-dark:#15803D;
+       --bg:#F8FAFC;
+       --card:#FFFFFF;
+       --border:#E5E7EB;
+       --text:#1F2937;
+       --muted:#6B7280;
+       --danger:#ef4444;
+       --danger-dark:#dc2626;
+       --shadow-sm:0 1px 2px rgba(16,24,40,.06);
+       --shadow:0 24px 60px rgba(16,24,40,.14);
+       --radius:20px;
+     }
+     *{box-sizing:border-box;}
+     html,body{height:100%;}
+     body{
+       margin:0;
+       font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       background:
+         radial-gradient(1100px 620px at 8% -12%, rgba(34,197,94,.16), transparent 60%),
+         radial-gradient(900px 560px at 112% 112%, rgba(59,130,246,.12), transparent 60%),
+         var(--bg);
+       color:var(--text);
+       overflow-x:hidden;
+     }
 
-    label{display:block; font-size:12px; color:var(--muted); font-weight:800; margin:14px 0 6px;}
+     /* Layout split: painel decorativo + card de login */
+     .wrap{
+       min-height:100vh;
+       display:grid;
+       grid-template-columns:1.05fr .95fr;
+       align-items:stretch;
+     }
+     .aside{
+       position:relative;
+       overflow:hidden;
+       background:linear-gradient(150deg, var(--primary), var(--primary-dark));
+       color:#fff;
+       padding:56px 48px;
+       display:flex;
+       flex-direction:column;
+       justify-content:center;
+       gap:18px;
+     }
+     .aside::after{
+       content:'';
+       position:absolute;inset:0;
+       background:
+         radial-gradient(500px 300px at 85% 20%, rgba(255,255,255,.22), transparent 60%),
+         radial-gradient(400px 320px at 10% 90%, rgba(255,255,255,.14), transparent 60%);
+       pointer-events:none;
+     }
+     .aside .big{font-size:clamp(28px,3.2vw,44px); font-weight:1000; letter-spacing:-.03em; line-height:1.1; position:relative;}
+     .aside .lead{font-size:15px; font-weight:600; opacity:.95; max-width:34ch; line-height:1.55; position:relative;}
+     .aside .shelf{display:flex; gap:10px; margin-top:8px; position:relative; flex-wrap:wrap;}
+     .aside .shelf .book{
+       width:26px;height:74px;border-radius:6px;
+       background:rgba(255,255,255,.25); border:1px solid rgba(255,255,255,.35);
+       box-shadow:inset 0 -14px 0 rgba(255,255,255,.18);
+     }
+     .aside .shelf .book:nth-child(2){height:64px;background:rgba(255,255,255,.35);}
+     .aside .shelf .book:nth-child(3){height:82px;}
+     .aside .shelf .book:nth-child(4){height:58px;background:rgba(255,255,255,.32);}
+     .aside .shelf .book:nth-child(5){height:72px;}
+     .aside .aside-logo{
+       width:52px;height:52px;border-radius:15px;background:rgba(255,255,255,.18);
+       border:1px solid rgba(255,255,255,.35); display:grid; place-items:center; font-size:26px;
+     }
 
-    .input-wrap{position:relative;}
-    input[type=email],input[type=text],input[type=password]{
-      width:100%;
-      height:46px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:0 44px 0 14px;
-      background:#fff;
-      color:var(--text);
-      outline:none;
-      font-weight:600;
-      font-size:14px;
-      transition:border-color 160ms ease, box-shadow 160ms ease;
-    }
-    input::placeholder{color:#9CA3AF; font-weight:500;}
-    input:focus{border-color:rgba(34,197,94,.70); box-shadow:0 0 0 4px rgba(34,197,94,.15);}
-    input.erro{border-color:var(--danger); box-shadow:0 0 0 4px rgba(239,68,68,.12);}
+     .pane{
+       display:grid;
+       place-items:center;
+       padding:32px 22px;
+     }
+     .card{
+       width:100%;
+       max-width:430px;
+       background:var(--card);
+       border:1px solid var(--border);
+       border-radius:var(--radius);
+       box-shadow:var(--shadow);
+       padding:36px 32px 28px;
+       animation:fadeIn 340ms ease both;
+     }
+     @keyframes fadeIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
+     .brand{
+       display:flex;
+       flex-direction:column;
+       align-items:center;
+       text-align:center;
+       gap:8px;
+       margin-bottom:26px;
+     }
+     .logo{
+       width:60px;height:60px;
+       border-radius:18px;
+       background:linear-gradient(135deg, var(--primary), var(--primary-dark));
+       display:grid;place-items:center;
+       font-size:30px;
+       box-shadow:0 10px 26px rgba(21,128,61,.28);
+       margin-bottom:4px;
+     }
+     .title{
+       font-weight:1000;
+       letter-spacing:-.02em;
+       font-size:22px;
+     }
+     .subtitle{color:var(--muted); font-weight:700; font-size:13px;}
 
-    .toggle-senha{
-      position:absolute;
-      right:8px;top:50%;
-      transform:translateY(-50%);
-      background:none;border:0;
-      cursor:pointer;
-      font-size:16px;
-      padding:6px 8px;
-      border-radius:8px;
-      line-height:1;
-      color:var(--muted);
-    }
-    .toggle-senha:hover{background:#F1F5F9;}
+     label{display:block; font-size:12px; color:var(--muted); font-weight:800; margin:16px 0 7px;}
 
-    button.entrar{
-      width:100%;
-      border:0;
-      border-radius:12px;
-      height:46px;
-      padding:0 14px;
-      cursor:pointer;
-      font-weight:800;
-      font-size:14px;
-      color:#fff;
-      background:var(--primary);
-      transition:transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:8px;
-      user-select:none;
-      margin-top:20px;
-    }
-    button.entrar:hover{background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 12px 25px rgba(21,128,61,.18);}
-    button.entrar:disabled{opacity:.65; cursor:not-allowed; transform:none; box-shadow:none;}
+     .input-wrap{position:relative;}
+     .input-wrap .field-ico{position:absolute; left:14px; top:50%; transform:translateY(-50%); font-size:15px; opacity:.6; pointer-events:none;}
+     input[type=email],input[type=text],input[type=password]{
+       width:100%;
+       height:50px;
+       border:1.5px solid var(--border);
+       border-radius:13px;
+       padding:0 46px 0 40px;
+       background:#fff;
+       color:var(--text);
+       outline:none;
+       font-weight:600;
+       font-size:14.5px;
+       transition:border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+     }
+     input::placeholder{color:#9CA3AF; font-weight:500;}
+     input:hover{border-color:#CBD5E1;}
+     input:focus{border-color:rgba(34,197,94,.75); box-shadow:0 0 0 4px rgba(34,197,94,.16); background:#fff;}
+     input.erro{border-color:var(--danger); box-shadow:0 0 0 4px rgba(239,68,68,.12);}
 
-    .divisor{
-      display:flex;align-items:center;gap:10px;
-      margin:18px 0 4px;
-      color:var(--muted);
-      font-size:11px;font-weight:700;
-      text-transform:uppercase;letter-spacing:.05em;
-    }
-    .divisor::before,.divisor::after{content:'';flex:1;height:1px;background:var(--border);}
+     .toggle-senha{
+       position:absolute;
+       right:8px;top:50%;
+       transform:translateY(-50%);
+       background:none;border:0;
+       cursor:pointer;
+       font-size:16px;
+       padding:8px 10px;
+       border-radius:9px;
+       line-height:1;
+       color:var(--muted);
+       transition:background 140ms ease;
+     }
+     .toggle-senha:hover{background:#F1F5F9;}
+     .toggle-senha:focus-visible{outline:2px solid var(--primary);outline-offset:1px;}
 
-    button.google{
-      width:100%;
-      border:1px solid var(--border);
-      border-radius:12px;
-      height:44px;
-      background:#fff;
-      color:var(--text);
-      font-weight:700;
-      font-size:14px;
-      cursor:pointer;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      transition:background 160ms ease, border-color 160ms ease, transform 160ms ease;
-      margin-top:10px;
-    }
-    button.google:hover{background:#F8FAFC; border-color:#CBD5E1; transform:translateY(-1px);}
-    button.google:disabled{opacity:.55; cursor:not-allowed; transform:none;}
+     button.entrar{
+       width:100%;
+       border:0;
+       border-radius:13px;
+       height:50px;
+       padding:0 14px;
+       cursor:pointer;
+       font-weight:800;
+       font-size:15px;
+       color:#fff;
+       background:var(--primary);
+       transition:transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+       display:inline-flex;
+       align-items:center;
+       justify-content:center;
+       gap:9px;
+       user-select:none;
+       margin-top:24px;
+       letter-spacing:.01em;
+     }
+     button.entrar:hover{background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 14px 28px rgba(21,128,61,.22);}
+     button.entrar:active{transform:translateY(0);}
+     button.entrar:disabled{opacity:.7; cursor:not-allowed; transform:none; box-shadow:none;}
 
-    .msg{
-      margin-top:14px;
-      font-weight:700;
-      font-size:13px;
-      color:var(--muted);
-      min-height:18px;
-      text-align:center;
-      border-radius:10px;
-      padding:0 4px;
-      transition: color 160ms ease;
-    }
-    .msg.error{
-      color:var(--danger-dark);
-      background:rgba(239,68,68,.08);
-      border:1px solid rgba(239,68,68,.25);
-      padding:9px 10px;
-    }
-    .msg.success{
-      color:var(--primary-dark);
-      background:rgba(34,197,94,.10);
-      border:1px solid rgba(34,197,94,.3);
-      padding:9px 10px;
-    }
+     /* Spinner de loading no botão */
+     .spinner{
+       width:17px;height:17px;border-radius:50%;
+       border:2.5px solid rgba(255,255,255,.4);
+       border-top-color:#fff;
+       animation:spin 700ms linear infinite;
+       display:none;
+     }
+     @keyframes spin{to{transform:rotate(360deg);}}
+     button.entrar.loading .spinner{display:inline-block;}
 
-    .hint{
-      margin-top:16px;
-      font-size:12px;
-      font-weight:600;
-      color:var(--muted);
-      line-height:1.5;
-      text-align:center;
-    }
-    .hint b{color:var(--text);}
+     .msg{
+       margin-top:16px;
+       font-weight:700;
+       font-size:13px;
+       color:var(--muted);
+       min-height:18px;
+       text-align:center;
+       border-radius:11px;
+       padding:0 4px;
+       transition: color 160ms ease;
+     }
+     .msg.error{
+       color:var(--danger-dark);
+       background:rgba(239,68,68,.08);
+       border:1px solid rgba(239,68,68,.25);
+       padding:10px 12px;
+     }
+     .msg.success{
+       color:var(--primary-dark);
+       background:rgba(34,197,94,.10);
+       border:1px solid rgba(34,197,94,.3);
+       padding:10px 12px;
+     }
+
+     .foot{
+       margin-top:22px;
+       font-size:11.5px;
+       font-weight:600;
+       color:var(--muted);
+       text-align:center;
+       line-height:1.6;
+     }
+
+     /* Tablet / celular: esconde o painel decorativo */
+     @media (max-width:920px){
+       .wrap{grid-template-columns:1fr;}
+       .aside{display:none;}
+       .pane{padding:24px 16px;}
+     }
+     @media (max-width:420px){
+       .card{padding:28px 20px 22px; border-radius:16px;}
+       .logo{width:54px;height:54px;font-size:26px;}
+       .title{font-size:20px;}
+     }
+     @media (prefers-color-scheme: dark){
+       :root{
+         --bg:#0B1220; --card:#0F172A; --border:#1E293B; --text:#E2E8F0; --muted:#94A3B8;
+       }
+       body{background:radial-gradient(1100px 620px at 8% -12%, rgba(34,197,94,.14), transparent 60%), radial-gradient(900px 560px at 112% 112%, rgba(59,130,246,.12), transparent 60%), var(--bg);}
+       input[type=email],input[type=text],input[type=password]{background:#0B1220; color:var(--text);}
+     }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card" role="form" aria-label="Tela de login">
-      <div class="brand">
-        <div class="logo">📚</div>
-        <div class="title">Sistema Biblioteca</div>
-        <div class="subtitle">Entre com suas credenciais para acessar</div>
-      </div>
+     <!-- Painel decorativo (oculto em telas pequenas) -->
+     <aside class="aside" aria-hidden="true">
+       <div class="aside-logo">📚</div>
+       <div class="big">Sistema da<br/>Biblioteca Escolar</div>
+       <div class="lead">Gestão de acervo, alunos, empréstimos e devoluções — simples e segura para o dia a dia da biblioteca.</div>
+       <div class="shelf">
+         <span class="book"></span><span class="book"></span><span class="book"></span>
+         <span class="book"></span><span class="book"></span>
+       </div>
+     </aside>
 
-      <form id="loginForm" novalidate>
-        <div>
-          <label for="email">E-mail ou usuário</label>
-          <div class="input-wrap">
-            <input id="email" type="text" autocomplete="username" placeholder="admin@biblioteca.local" required />
-          </div>
-        </div>
-        <div>
-          <label for="password">Senha</label>
-          <div class="input-wrap">
-            <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
-            <button type="button" class="toggle-senha" id="toggleSenha" title="Mostrar / ocultar senha" aria-label="Mostrar ou ocultar senha">👁️</button>
-          </div>
-        </div>
+     <!-- Card de login -->
+     <div class="pane">
+       <div class="card" role="form" aria-label="Tela de login">
+         <div class="brand">
+           <div class="logo">📚</div>
+           <div class="title">Sistema Biblioteca</div>
+           <div class="subtitle">Entre com seu e-mail e senha</div>
+         </div>
 
-        <button type="submit" id="loginBtn" class="entrar">Entrar</button>
+         <form id="loginForm" novalidate>
+           <div>
+             <label for="email">E-mail</label>
+             <div class="input-wrap">
+               <span class="field-ico">✉️</span>
+               <input id="email" type="email" autocomplete="username" inputmode="email" placeholder="seu.nome@escola.exemplo" required />
+             </div>
+           </div>
+           <div>
+             <label for="password">Senha</label>
+             <div class="input-wrap">
+               <span class="field-ico">🔒</span>
+               <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
+               <button type="button" class="toggle-senha" id="toggleSenha" title="Mostrar / ocultar senha" aria-label="Mostrar ou ocultar senha">👁️</button>
+             </div>
+           </div>
 
-        <div class="msg" id="loginMsg"></div>
+           <button type="submit" id="loginBtn" class="entrar">
+             <span class="spinner" aria-hidden="true"></span>
+             <span id="loginBtnText">Entrar</span>
+           </button>
 
-        <div class="divisor">ou</div>
+           <div class="msg" id="loginMsg" role="alert" aria-live="polite"></div>
 
-        <button type="button" id="googleBtn" class="google">
-          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-            <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
-            <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.9 1.2 8 3l5.7-5.7C34.2 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
-            <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/>
-            <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.1-4.1 5.5l6.2 5.2C36.9 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/>
-          </svg>
-          Continuar com Google
-        </button>
-
-        <div class="hint">
-          <b>Credenciais padrão:</b> admin / 1234<br/>
-          ou e-mail: <b>admin@biblioteca.local</b> / 1234
-        </div>
-      </form>
-    </div>
+           <div class="foot">
+             Acesso restrito à equipe da biblioteca.<br/>
+             Esqueceu a senha? Procure a administração do sistema.
+           </div>
+         </form>
+       </div>
+     </div>
   </div>
 
   <script>
-    const LS_AUTH_KEY = 'biblioteca_auth_v1';
     const $ = (sel) => document.querySelector(sel);
 
-    function setAuth(userData){
-      localStorage.setItem(LS_AUTH_KEY, JSON.stringify({ ok: true, at: Date.now(), user: userData || { username: 'admin' } }));
-    }
-    function isAuth(){
-      try{
-        const raw = localStorage.getItem(LS_AUTH_KEY);
-        if(!raw) return false;
-        return !!JSON.parse(raw)?.ok;
-      }catch{ return false; }
-    }
     function setMsg(msg, tipo){
       const el = $('#loginMsg');
       el.textContent = msg || '';
@@ -261,26 +306,12 @@
       if (tipo) el.classList.add(tipo);
     }
 
-    // Mensagens de erro vindas do callback do Google (?erro=...)
-    (function(){
-      const p = new URLSearchParams(location.search);
-      const mapa = {
-        'google-cancelado': 'Login com Google cancelado.',
-        'google-nao-configurado': 'Login com Google ainda não foi configurado no servidor.',
-        'google-token': 'Falha ao autenticar com o Google. Tente novamente.',
-        'google-perfil': 'Não foi possível obter seu e-mail do Google.',
-        'google-falhou': 'Falha inesperada no login com Google.'
-      };
-      const erro = p.get('erro');
-      if (erro && mapa[erro]) setMsg(mapa[erro], 'error');
-    })();
 
     // Mensagem de sessão expirada vinda do index.html (?sessao=expirada)
     (function(){
       const p = new URLSearchParams(location.search);
       if (p.get('sessao') === 'expirada') {
         setMsg('Sua sessão expirou. Faça login novamente.', 'error');
-        try { localStorage.removeItem(LS_AUTH_KEY); } catch (_) {}
       }
     })();
 
@@ -289,11 +320,7 @@
     (async function(){
       try {
         const res = await fetch('/api/auth/session', { credentials: 'include' });
-        if (res.ok) {
-          location.replace('./index.html');
-        } else {
-          try { localStorage.removeItem(LS_AUTH_KEY); } catch (_) {}
-        }
+        if (res.ok) location.replace('./index.html');
       } catch (e) { /* servidor indisponível */ }
     })();
 
@@ -305,34 +332,31 @@
       $('#toggleSenha').textContent = visivel ? '👁️' : '🙈';
     });
 
-    // Verifica se o login Google está habilitado no servidor
-    (async function(){
-      try {
-        const res = await fetch('/api/auth/google/status');
-        if (res.ok) {
-          const { habilitado } = await res.json();
-          $('#googleBtn').disabled = !habilitado;
-          $('#googleBtn').title = habilitado ? '' : 'Login com Google não configurado no servidor';
-        }
-      } catch (e) { /* servidor indisponível */ }
-    })();
-
-    $('#googleBtn').addEventListener('click', () => {
-      setMsg('Redirecionando para o Google...', 'success');
-      window.location.href = '/api/auth/google';
-    });
+    let csrfToken = null;
+    (async () => { csrfToken = await obterCsrfToken(); })();
 
     // Login sempre na mesma origem em que a página foi aberta.
     // (Nada de tentar outras portas: o cookie de sessão ficaria gravado em
     // outra porta e o index.html derrubaria a sessão, causando loop de redirecionamento)
-    async function tryAuthRequest(identificador, password) {
+    // Obtém o token CSRF da sessão (necessário para o POST de login).
+    async function obterCsrfToken() {
+      try {
+        const res = await fetch('/api/auth/csrf', { credentials: 'include' });
+        if (res.ok) { const d = await res.json(); return d.csrfToken || null; }
+      } catch (e) { /* ignore */ }
+      return null;
+    }
+
+    async function tryAuthRequest(email, password) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
         const res = await fetch('/api/auth/login', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: identificador, password }),
+          headers,
+          body: JSON.stringify({ email, password }),
           signal: controller.signal,
           credentials: 'include'
         });
@@ -344,11 +368,12 @@
       }
     }
 
-    async function loginUser(identificador, password) {
+    async function loginUser(email, password) {
       const btn = $('#loginBtn');
-      const originalText = btn.textContent;
+      const btnText = $('#loginBtnText');
       btn.disabled = true;
-      btn.innerHTML = 'Entrando...';
+      btn.classList.add('loading');
+      if (btnText) btnText.textContent = 'Entrando...';
       setMsg('');
 
       try {
@@ -357,7 +382,10 @@
           return;
         }
 
-        const response = await tryAuthRequest(identificador, password);
+        // Garante que temos um token CSRF válido para esta sessão.
+        if (!csrfToken) csrfToken = await obterCsrfToken();
+
+        const response = await tryAuthRequest(email, password);
 
         if (!response) {
           setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
@@ -369,17 +397,18 @@
 
         if (response.ok && data && data.ok) {
           setMsg('Login realizado com sucesso! Redirecionando...', 'success');
-          setAuth(data.user);
           location.replace('./index.html');
           return;
         }
 
-        setMsg((data && data.error) || 'Usuário ou senha inválidos.', 'error');
+        // Mensagem sempre genérica (evita enumeração de usuários).
+        setMsg((data && data.error) || 'E-mail ou senha inválidos.', 'error');
       } catch (err) {
         setMsg('Não foi possível conectar ao servidor. Verifique se o sistema está rodando.', 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = originalText;
+        btn.classList.remove('loading');
+        if (btnText) btnText.textContent = 'Entrar';
       }
     }
 
@@ -391,9 +420,9 @@
       $('#email').classList.remove('erro');
       $('#password').classList.remove('erro');
 
-      if (!u) { setMsg('Informe o e-mail ou usuário.', 'error'); $('#email').classList.add('erro'); return; }
-      if (u.includes('@') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u)) {
-        setMsg('E-mail inválido. Verifique e tente novamente.', 'error'); $('#email').classList.add('erro'); return;
+      if (!u) { setMsg('Informe o e-mail.', 'error'); $('#email').classList.add('erro'); return; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u)) {
+        setMsg('Informe um e-mail válido.', 'error'); $('#email').classList.add('erro'); return;
       }
       if (!p) { setMsg('Informe a senha.', 'error'); $('#password').classList.add('erro'); return; }
 

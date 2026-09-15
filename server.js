@@ -2,11 +2,13 @@
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const helmet = require('helmet');
 
-const db = require('./db'); // garante que o banco e o usuário admin padrão sejam criados
-
+const db = require('./db'); // garante que o banco seja inicializado/migrado
 const requireAuth = require('./middleware/requireAuth');
+const { csrfProtection } = require('./middleware/csrf');
 const authRoutes = require('./routes/auth');
+const meRoutes = require('./routes/me');
 const alunosRoutes = require('./routes/alunos');
 const livrosRoutes = require('./routes/livros');
 const emprestimosRoutes = require('./routes/emprestimos');
@@ -19,6 +21,38 @@ const estatisticasRoutes = require('./routes/estatisticas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Atrás de proxy (produção) respeita X-Forwarded-* para cookies seguros/IP correto.
+app.set('trust proxy', 1);
+
+// ---- Headers de segurança (Helmet) ----
+// CSP ajustada para NÃO quebrar o frontend atual:
+// - imagens podem vir de qualquer https/http (capas de livros) e data:;
+// - scripts ficam no próprio host, mas o index.html usa <script> inline pequeno
+//   (navegação entre seções) e módulos locais; mantemos 'unsafe-inline' apenas
+//   para estilos/scripts inline já existentes, sem 'unsafe-eval'.
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      frameAncestors: ["'self'"],
+      // QR/leitor USB usam APIs locais; webcam não é usada (Etapa 3).
+      mediaSrc: ["'self'", "blob:", "data:"]
+    }
+  },
+  // Permitir imagens/recursos de outros hosts (capas via URL).
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  // Não forçar upgrade de http->https em dev.
+  hsts: process.env.NODE_ENV === 'production'
+}));
 
 // Secret da sessão: via variável de ambiente em produção.
 // Em dev, usamos um secret PERSISTENTE em arquivo: se ele mudar a cada
@@ -40,7 +74,7 @@ if (!SESSION_SECRET) {
 // Origens permitidas (desenvolvimento). Em produção, defina ALLOWED_ORIGINS.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001').split(',');
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // Middleware CORS para desenvolvimento e compatibilidade de origens
 app.use((req, res, next) => {
@@ -70,8 +104,13 @@ app.use(session({
   }
 }));
 
+// Proteção CSRF: deve rodar DEPOIS do express-session (precisa de req.session)
+// e DEPOIS do parser de JSON, antes das rotas.
+app.use(csrfProtection);
+
 // Rotas da API
 app.use('/api/auth', authRoutes);
+app.use('/api/me', requireAuth, meRoutes);
 app.use('/api/alunos', requireAuth, alunosRoutes);
 app.use('/api/livros', requireAuth, livrosRoutes);
 

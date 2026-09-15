@@ -65,16 +65,36 @@ document.addEventListener('click', (e) => {
 
 // ---------------- API ----------------
 
+// Token CSRF da sessão (para requisições mutantes). Buscado uma vez e reusado.
+let csrfToken = null;
+async function obterCsrfToken() {
+  if (csrfToken) return csrfToken;
+  try {
+    const res = await fetch('/api/auth/csrf', { credentials: 'include' });
+    if (res.ok) { const d = await res.json(); csrfToken = d.csrfToken || null; }
+  } catch (e) { /* ignore */ }
+  return csrfToken;
+}
+
 async function api(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = { 'Content-Type': 'application/json' };
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const t = await obterCsrfToken();
+    if (t) headers['X-CSRF-Token'] = t;
+  }
+  const opts = { ...options, headers, credentials: 'include' };
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    ...options,
+    ...opts,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
   let data = null;
   try { data = await res.json(); } catch (e) { /* resposta sem JSON */ }
   if (!res.ok) {
+    // Sessão expirada: manda de volta ao login.
+    if (res.status === 401) {
+      try { window.location.replace('./login.html?sessao=expirada'); } catch (_) {}
+    }
     const msg = (data && data.error) ? data.error : `Erro ${res.status}`;
     throw new Error(msg);
   }
@@ -2529,98 +2549,146 @@ function renderRankingSalas(data) {
 }
 
 // ============================================================
-// TEMA / PERSONALIZAÇÃO
+// TEMA / PERSONALIZAÇÃO (por usuário, persistido no servidor)
 // ============================================================
+//
+// Correção Etapa 5: recuperamos as opções que existiam ANTES da Etapa 5
+// (paletas, cores customizadas, plano de fundo com upload, opacidade/desfoque e
+// identidade da biblioteca) — agora salvas POR USUÁRIO no banco (user_preferences),
+// em vez de localStorage.
 
-const LS_TEMA = 'biblioteca_tema_v1';
+// Cache visual apenas (evita "flash" de cor errada). A FONTE DA VERDADE é o banco.
+const LS_PREFS_CACHE = 'biblioteca_prefs_cache_v1';
 
-const PALETAS = [
-  { nome: 'Verde Esmeralda', primary: '#22C55E', dark: '#15803D' },
-  { nome: 'Azul Oceano', primary: '#3B82F6', dark: '#1D4ED8' },
-  { nome: 'Roxo Real', primary: '#8B5CF6', dark: '#6D28D9' },
-  { nome: 'Rosa Vibrante', primary: '#EC4899', dark: '#BE185D' },
-  { nome: 'Laranja Solar', primary: '#F97316', dark: '#C2410C' },
-  { nome: 'Vermelho Rubi', primary: '#EF4444', dark: '#B91C1C' },
-  { nome: 'Ciano Tropical', primary: '#06B6D4', dark: '#0E7490' },
-  { nome: 'Índigo Noturno', primary: '#6366F1', dark: '#4338CA' }
-];
+const TEMAS_DISPONIVEIS = ['claro', 'escuro', 'sistema'];
 
-const WALLPAPERS = [
-  { nome: 'Nenhum', css: null },
-  { nome: 'Gradiente Verde', css: 'linear-gradient(135deg, #d1fae5, #a7f3d0, #6ee7b7)' },
-  { nome: 'Gradiente Azul', css: 'linear-gradient(135deg, #dbeafe, #bfdbfe, #93c5fd)' },
-  { nome: 'Gradiente Rosé', css: 'linear-gradient(135deg, #fce7f3, #fbcfe8, #f9a8d4)' },
-  { nome: 'Gradiente Âmbar', css: 'linear-gradient(135deg, #fef3c7, #fde68a, #fcd34d)' },
-  { nome: 'Biblioteca Clássica', css: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 50%, #d97706 100%)' }
-];
+// Catálogos (preenchidos pelo servidor em carregarPreferencias; fallback local).
+let PALETAS = {
+  verde:    { nome: 'Verde Esmeralda', primary: '#22C55E', dark: '#15803D' },
+  azul:     { nome: 'Azul Oceano',     primary: '#3B82F6', dark: '#1D4ED8' },
+  roxo:     { nome: 'Roxo Real',       primary: '#8B5CF6', dark: '#6D28D9' },
+  rosa:     { nome: 'Rosa Vibrante',   primary: '#EC4899', dark: '#BE185D' },
+  laranja:  { nome: 'Laranja Solar',   primary: '#F97316', dark: '#C2410C' },
+  vermelho: { nome: 'Vermelho Rubi',   primary: '#EF4444', dark: '#B91C1C' },
+  ciano:    { nome: 'Ciano Tropical',  primary: '#06B6D4', dark: '#0E7490' },
+  indigo:   { nome: 'Índigo Noturno',  primary: '#6366F1', dark: '#4338CA' }
+};
 
-function aplicarTema(tema) {
-  const root = document.documentElement;
-  if (tema.primary) {
-    root.style.setProperty('--primary', tema.primary);
-    root.style.setProperty('--primary-dark', tema.dark || tema.primary);
-  }
-  if (tema.bg) root.style.setProperty('--bg', tema.bg);
-  if (tema.card) root.style.setProperty('--card', tema.card);
+let WALLPAPERS = {
+  none:       { nome: 'Nenhum',              css: null },
+  grad_verde: { nome: 'Gradiente Verde',     css: 'linear-gradient(135deg, #d1fae5, #a7f3d0, #6ee7b7)' },
+  grad_azul:  { nome: 'Gradiente Azul',      css: 'linear-gradient(135deg, #dbeafe, #bfdbfe, #93c5fd)' },
+  grad_rose:  { nome: 'Gradiente Rosé',      css: 'linear-gradient(135deg, #fce7f3, #fbcfe8, #f9a8d4)' },
+  grad_ambar: { nome: 'Gradiente Âmbar',     css: 'linear-gradient(135deg, #fef3c7, #fde68a, #fcd34d)' },
+  grad_biblio:{ nome: 'Biblioteca Clássica', css: 'linear-gradient(180deg, #fef3c7 0%, #fde68a 50%, #d97706 100%)' },
+  custom:     { nome: 'Minha imagem',        css: null }
+};
 
-  if (tema.wallpaper) {
-    document.body.classList.add('has-custom-bg');
-    root.style.setProperty('--custom-bg-img', tema.wallpaper);
-    root.style.setProperty('--custom-overlay', `rgba(248, 250, 252, ${(tema.opacity ?? 85) / 100})`);
-    root.style.setProperty('--custom-blur', `${tema.blur ?? 0}px`);
-  } else {
-    document.body.classList.remove('has-custom-bg');
-    root.style.setProperty('--custom-bg-img', 'none');
-  }
-
-  if (tema.libraryName) {
-    const brand = document.querySelector('.sidebar .brand .title span');
-    if (brand) brand.textContent = tema.libraryName;
-    $('#subtitleText').textContent = tema.libraryName;
-  }
-  if (tema.librarianName) {
-    $('#helloText').textContent = `Olá, ${tema.librarianName} 👋`;
-    document.querySelector('.avatar .name').textContent = tema.librarianName;
-  }
-}
-
-function carregarTema() {
-  try {
-    const raw = localStorage.getItem(LS_TEMA);
-    if (raw) aplicarTema(JSON.parse(raw));
-  } catch (e) {}
-}
-
-function salvarTema() {
-  const tema = {
-    primary: $('#themeColorPrimary').value,
-    dark: escurecerCor($('#themeColorPrimary').value, 30),
-    bg: $('#themeColorBg').value,
-    card: $('#themeColorCard').value,
-    wallpaper: window.__temaWallpaper || null,
-    opacity: parseInt($('#themeBgOpacity').value, 10) || 85,
-    blur: parseInt($('#themeBgBlur').value, 10) || 0,
-    libraryName: $('#themeLibraryName').value.trim(),
-    librarianName: $('#themeLibrarianName').value.trim()
-  };
-  localStorage.setItem(LS_TEMA, JSON.stringify(tema));
-  aplicarTema(tema);
-  fecharModal('#modalPersonalizacao');
-  toast('Personalização salva!');
-}
+// Estado das preferências atuais do usuário logado.
+let preferenciasAtuais = {
+  cor_principal: 'padrao', tema: 'sistema', paleta: null,
+  cor_destaque: null, cor_fundo: null, cor_card: null,
+  wallpaper: 'none', wallpaper_css: null, wallpaper_imagem: null,
+  wallpaper_opacidade: 85, wallpaper_blur: 0,
+  biblioteca_nome: null, responsavel_nome: null
+};
 
 function escurecerCor(hex, porcento) {
-  const n = parseInt(hex.slice(1), 16);
+  const n = parseInt(String(hex).slice(1), 16);
   const r = Math.max(0, Math.round(((n >> 16) & 255) * (1 - porcento / 100)));
   const g = Math.max(0, Math.round(((n >> 8) & 255) * (1 - porcento / 100)));
   const b = Math.max(0, Math.round((n & 255) * (1 - porcento / 100)));
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
+// Aplica TODAS as preferências visuais de uma vez (CSS vars + tema + identidade).
+function aplicarPreferencias(pref) {
+  if (pref) preferenciasAtuais = { ...preferenciasAtuais, ...pref };
+  const p = preferenciasAtuais;
+  const root = document.documentElement;
+
+  // Cor de destaque = paleta (se houver) OU cor_destaque custom OU cor_principal.
+  const paletaCor = p.paleta && PALETAS[p.paleta] ? PALETAS[p.paleta] : null;
+  let primary = paletaCor ? paletaCor.primary : (p.cor_destaque || '#22C55E');
+  let dark = paletaCor ? paletaCor.dark : escurecerCor(primary, 30);
+  root.style.setProperty('--primary', primary);
+  root.style.setProperty('--primary-dark', dark);
+
+  // Cores opcionais de fundo/card.
+  if (p.cor_fundo) root.style.setProperty('--bg', p.cor_fundo); else root.style.removeProperty('--bg');
+  if (p.cor_card) root.style.setProperty('--card', p.cor_card); else root.style.removeProperty('--card');
+
+  // Plano de fundo (gradiente ou imagem enviada) + opacidade/desfoque.
+  let bgImg = null;
+  if (p.wallpaper === 'custom' && p.wallpaper_imagem) bgImg = `url(${p.wallpaper_imagem})`;
+  else if (p.wallpaper_css) bgImg = p.wallpaper_css;
+  else if (p.wallpaper && WALLPAPERS[p.wallpaper] && WALLPAPERS[p.wallpaper].css) bgImg = WALLPAPERS[p.wallpaper].css;
+
+  if (bgImg) {
+    document.body.classList.add('has-custom-bg');
+    root.style.setProperty('--custom-bg-img', bgImg);
+    const op = (p.wallpaper_opacidade ?? 85) / 100;
+    root.style.setProperty('--custom-overlay', `rgba(248, 250, 252, ${op})`);
+    root.style.setProperty('--custom-blur', `${p.wallpaper_blur ?? 0}px`);
+  } else {
+    document.body.classList.remove('has-custom-bg');
+    root.style.setProperty('--custom-bg-img', 'none');
+  }
+
+  // Tema claro/escuro/sistema.
+  let escuro = false;
+  if (p.tema === 'escuro') escuro = true;
+  else if (p.tema === 'sistema') {
+    escuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  root.setAttribute('data-tema', escuro ? 'escuro' : 'claro');
+  document.body.classList.toggle('tema-escuro', escuro);
+
+  // Identidade (nome da biblioteca / responsável).
+  if (p.biblioteca_nome) {
+    const brand = document.querySelector('.sidebar .brand .title span');
+    if (brand) brand.textContent = p.biblioteca_nome;
+    const sub = $('#subtitleText');
+    if (sub) sub.textContent = p.biblioteca_nome;
+  }
+  if (p.responsavel_nome) {
+    aplicarNomeNoCabecalho(p.responsavel_nome);
+  }
+
+  // Cache visual (não é a fonte da verdade).
+  try { localStorage.setItem(LS_PREFS_CACHE, JSON.stringify(preferenciasAtuais)); } catch (e) {}
+}
+
+// Cache local: aplica imediatamente para evitar flash visual ao abrir a página.
+function carregarPreferenciasCache() {
+  try {
+    const raw = localStorage.getItem(LS_PREFS_CACHE);
+    if (raw) aplicarPreferencias(JSON.parse(raw));
+  } catch (e) {}
+}
+
+// Carrega as preferências reais do servidor (FONTE DA VERDADE) e aplica.
+async function carregarPreferencias() {
+  try {
+    const pref = await api('/api/me/preferences');
+    // Atualiza os catálogos se o servidor enviou.
+    if (pref.paletas) PALETAS = pref.paletas;
+    if (pref.wallpapers) WALLPAPERS = pref.wallpapers;
+    preferenciasAtuais = { ...preferenciasAtuais, ...pref };
+    aplicarPreferencias(preferenciasAtuais);
+    preencherFormularioPersonalizacao();
+  } catch (e) { /* mantém o cache aplicado */ }
+}
+
+// ============================================================
+// MODAL DE PERSONALIZAÇÃO (completo)
+// ============================================================
+
 function renderPaletas() {
   const container = $('#themePalettesContainer');
-  container.innerHTML = PALETAS.map((p, i) => `
-    <div class="theme-palette-card" data-palette="${i}">
+  if (!container) return;
+  container.innerHTML = Object.entries(PALETAS).map(([key, p]) => `
+    <div class="theme-palette-card" data-palette="${key}">
       <div class="theme-palette-dots">
         <span class="theme-palette-dot" style="background:${p.primary};"></span>
         <span class="theme-palette-dot" style="background:${p.dark};"></span>
@@ -2628,67 +2696,244 @@ function renderPaletas() {
       <div class="theme-palette-name">${escapeHtml(p.nome)}</div>
     </div>
   `).join('');
-
-  container.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-palette]');
-    if (!card) return;
-    const p = PALETAS[parseInt(card.getAttribute('data-palette'), 10)];
-    $('#themeColorPrimary').value = p.primary;
-    $('#themeColorPrimaryHex').textContent = p.primary;
-    $$('.theme-palette-card').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
-  });
 }
 
 function renderWallpapers() {
   const container = $('#themeWallpapersContainer');
-  container.innerHTML = WALLPAPERS.map((w, i) => `
-    <div class="theme-wallpaper-card" data-wallpaper="${i}">
+  if (!container) return;
+  const itens = Object.entries(WALLPAPERS).filter(([k]) => k !== 'custom');
+  container.innerHTML = itens.map(([key, w]) => `
+    <div class="theme-wallpaper-card" data-wallpaper="${key}">
       <div class="theme-wallpaper-thumb" style="${w.css ? `background:${w.css};` : 'background:#f1f5f9;'}"></div>
       <div class="theme-palette-name">${escapeHtml(w.nome)}</div>
     </div>
   `).join('');
+}
 
-  container.addEventListener('click', (e) => {
-    const card = e.target.closest('[data-wallpaper]');
-    if (!card) return;
-    const w = WALLPAPERS[parseInt(card.getAttribute('data-wallpaper'), 10)];
-    window.__temaWallpaper = w.css || null;
-    $('#themeBgControlsContainer').style.display = w.css ? 'block' : 'none';
-    $$('.theme-wallpaper-card').forEach(c => c.classList.remove('active'));
-    card.classList.add('active');
+// Marca visualmente os itens ativos (paleta/wallpaper).
+function marcarSelecoesPersonalizacao() {
+  $$('.theme-palette-card').forEach(c => {
+    c.classList.toggle('active', c.getAttribute('data-palette') === preferenciasAtuais.paleta);
+  });
+  $$('.theme-wallpaper-card').forEach(c => {
+    c.classList.toggle('active', c.getAttribute('data-wallpaper') === preferenciasAtuais.wallpaper);
   });
 }
 
+function preencherFormularioPersonalizacao() {
+  const p = preferenciasAtuais;
+  if ($('#prefCorPrincipal')) $('#prefCorPrincipal').value = p.cor_principal || 'padrao';
+  if ($('#prefTema')) $('#prefTema').value = p.tema || 'sistema';
+  if ($('#themeColorPrimary')) $('#themeColorPrimary').value = p.cor_destaque || '#22C55E';
+  if ($('#themeColorPrimaryHex')) $('#themeColorPrimaryHex').textContent = p.cor_destaque || '#22C55E';
+  if ($('#themeColorBg')) $('#themeColorBg').value = p.cor_fundo || '#F8FAFC';
+  if ($('#themeColorBgHex')) $('#themeColorBgHex').textContent = p.cor_fundo || '#F8FAFC';
+  if ($('#themeColorCard')) $('#themeColorCard').value = p.cor_card || '#FFFFFF';
+  if ($('#themeColorCardHex')) $('#themeColorCardHex').textContent = p.cor_card || '#FFFFFF';
+  if ($('#themeBgOpacity')) $('#themeBgOpacity').value = p.wallpaper_opacidade ?? 85;
+  if ($('#themeBgOpacityVal')) $('#themeBgOpacityVal').textContent = `${p.wallpaper_opacidade ?? 85}%`;
+  if ($('#themeBgBlur')) $('#themeBgBlur').value = p.wallpaper_blur ?? 0;
+  if ($('#themeBgBlurVal')) $('#themeBgBlurVal').textContent = `${p.wallpaper_blur ?? 0}px`;
+  if ($('#themeLibraryName')) $('#themeLibraryName').value = p.biblioteca_nome || '';
+  if ($('#themeLibrarianName')) $('#themeLibrarianName').value = p.responsavel_nome || '';
+  const bgControls = $('#themeBgControlsContainer');
+  if (bgControls) {
+    bgControls.style.display = (p.wallpaper === 'custom' || (WALLPAPERS[p.wallpaper] && WALLPAPERS[p.wallpaper].css)) ? 'block' : 'none';
+  }
+  marcarSelecoesPersonalizacao();
+}
+
 function abrirPersonalizacao() {
-  // Preenche campos com valores atuais
-  const root = document.documentElement;
-  $('#themeColorPrimary').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--primary').trim()) || '#22C55E';
-  $('#themeColorPrimaryHex').textContent = $('#themeColorPrimary').value;
-  $('#themeColorBg').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--bg').trim()) || '#F8FAFC';
-  $('#themeColorBgHex').textContent = $('#themeColorBg').value;
-  $('#themeColorCard').value = rgbParaHex(getComputedStyle(root).getPropertyValue('--card').trim()) || '#FFFFFF';
-  $('#themeColorCardHex').textContent = $('#themeColorCard').value;
+  renderPaletas();
+  renderWallpapers();
+  preencherFormularioPersonalizacao();
   abrirModal('#modalPersonalizacao');
 }
 
-function rgbParaHex(cor) {
-  if (!cor) return null;
-  if (cor.startsWith('#')) return cor;
-  const m = cor.match(/(\d+),\s*(\d+),\s*(\d+)/);
-  if (!m) return null;
-  const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+// Junta o estado atual do formulário (paleta, cores, fundo, identidade).
+function coletarPreferenciasDoFormulario() {
+  // A paleta selecionada fica no estado (window.__prefPaleta tem prioridade).
+  const paleta = window.__prefPaleta !== undefined ? window.__prefPaleta : (preferenciasAtuais.paleta || null);
+  const pai = {
+    cor_principal: $('#prefCorPrincipal') ? $('#prefCorPrincipal').value : 'padrao',
+    tema: $('#prefTema') ? $('#prefTema').value : 'sistema',
+    paleta: paleta,
+    wallpaper: window.__prefWallpaper !== undefined ? window.__prefWallpaper : (preferenciasAtuais.wallpaper || 'none'),
+    wallpaper_imagem: window.__prefWallpaperImagem !== undefined ? window.__prefWallpaperImagem : preferenciasAtuais.wallpaper_imagem,
+    wallpaper_opacidade: parseInt($('#themeBgOpacity') ? $('#themeBgOpacity').value : 85, 10) || 85,
+    wallpaper_blur: parseInt($('#themeBgBlur') ? $('#themeBgBlur').value : 0, 10) || 0,
+    biblioteca_nome: $('#themeLibraryName') ? $('#themeLibraryName').value.trim() : null,
+    responsavel_nome: $('#themeLibrarianName') ? $('#themeLibrarianName').value.trim() : null
+  };
+  // Cor de destaque: só envia custom quando NÃO há paleta (a paleta manda).
+  if (!paleta && $('#themeColorPrimary')) {
+    pai.cor_destaque = $('#themeColorPrimary').value;
+  } else {
+    pai.cor_destaque = null; // limpa a cor custom ao escolher uma paleta
+  }
+  if ($('#themeColorBg')) pai.cor_fundo = $('#themeColorBg').value;
+  if ($('#themeColorCard')) pai.cor_card = $('#themeColorCard').value;
+  return pai;
 }
 
-function restaurarTemaPadrao() {
-  fecharModal('#modalPersonalizacao');
-  abrirModal('#modalConfirmarResetTema');
+async function salvarPreferencias() {
+  const pai = coletarPreferenciasDoFormulario();
+  // Aplica na hora (feedback imediato).
+  aplicarPreferencias(pai);
+  try {
+    const r = await api('/api/me/preferences', { method: 'PUT', body: pai });
+    if (r.preferences) {
+      preferenciasAtuais = { ...preferenciasAtuais, ...r.preferences };
+      aplicarPreferencias(preferenciasAtuais);
+    }
+    fecharModal('#modalPersonalizacao');
+    toast('Personalização salva!');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
 }
 
-function confirmarRestauracaoTema() {
-  localStorage.removeItem(LS_TEMA);
-  window.location.reload();
+// Seleciona uma paleta rápida (na UI).
+function selecionarPaleta(key) {
+  const p = PALETAS[key];
+  if (!p) return;
+  preferenciasAtuais.paleta = key;
+  window.__prefPaleta = key;
+  if ($('#themeColorPrimary')) $('#themeColorPrimary').value = p.primary;
+  if ($('#themeColorPrimaryHex')) $('#themeColorPrimaryHex').textContent = p.primary;
+  // Aplica na hora para o usuário ver o efeito.
+  aplicarPreferencias({ paleta: key });
+  marcarSelecoesPersonalizacao();
+}
+
+// Seleciona um plano de fundo (na UI).
+function selecionarWallpaper(key) {
+  if (!WALLPAPERS[key]) return;
+  preferenciasAtuais.wallpaper = key;
+  window.__prefWallpaper = key;
+  if (key !== 'custom') window.__prefWallpaperImagem = null;
+  if ($('#themeBgControlsContainer')) {
+    $('#themeBgControlsContainer').style.display = (key === 'custom' || (WALLPAPERS[key] && WALLPAPERS[key].css)) ? 'block' : 'none';
+  }
+  aplicarPreferencias({ wallpaper: key, wallpaper_css: WALLPAPERS[key] ? WALLPAPERS[key].css : null });
+  marcarSelecoesPersonalizacao();
+}
+
+// Restaura a personalização padrão do usuário (zera campos visuais, mantém tema).
+async function restaurarTemaPadrao() {
+  const padrao = {
+    cor_principal: 'padrao', paleta: null, cor_destaque: null, cor_fundo: null, cor_card: null,
+    wallpaper: 'none', wallpaper_imagem: null, wallpaper_opacidade: 85, wallpaper_blur: 0,
+    biblioteca_nome: null, responsavel_nome: null
+  };
+  preferenciasAtuais = { ...preferenciasAtuais, ...padrao };
+  window.__prefWallpaper = 'none';
+  window.__prefWallpaperImagem = null;
+  aplicarPreferencias(preferenciasAtuais);
+  try {
+    const r = await api('/api/me/preferences', { method: 'PUT', body: padrao });
+    if (r.preferences) { preferenciasAtuais = { ...preferenciasAtuais, ...r.preferences }; aplicarPreferencias(preferenciasAtuais); }
+    fecharModal('#modalConfirmarResetTema');
+    fecharModal('#modalPersonalizacao');
+    toast('Personalização restaurada ao padrão.');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
+}
+
+function confirmarRestauracaoTema() { restaurarTemaPadrao(); }
+
+// ============================================================
+// MEU PERFIL
+// ============================================================
+
+let perfilAtual = null;
+
+// Carrega o perfil do usuário logado e ajusta o cabeçalho (nome próprio).
+async function carregarMeuPerfil() {
+  try {
+    const data = await api('/api/me');
+    perfilAtual = data.user;
+    if (perfilAtual && perfilAtual.nome) aplicarNomeNoCabecalho(perfilAtual.nome);
+  } catch (e) { /* a sessão pode ter expirado; api() já redireciona */ }
+}
+
+async function abrirPerfil() {
+  try {
+    const data = await api('/api/me');
+    perfilAtual = data.user;
+    renderPerfil();
+    abrirModal('#modalPerfil');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
+}
+
+function renderPerfil() {
+  if (!perfilAtual) return;
+  if ($('#perfilNome')) $('#perfilNome').textContent = perfilAtual.nome || '—';
+  if ($('#perfilEmail')) $('#perfilEmail').textContent = perfilAtual.email || '—';
+  if ($('#perfilStatus')) $('#perfilStatus').textContent = perfilAtual.ativo ? 'Ativa' : 'Desativada';
+  if ($('#perfilNomeInput')) $('#perfilNomeInput').value = perfilAtual.nome || '';
+  if ($('#perfilEmailNovo')) $('#perfilEmailNovo').value = perfilAtual.email || '';
+  // Limpa campos sensiveis
+  ['#perfilEmailSenha', '#perfilSenhaAtual', '#perfilSenhaNova', '#perfilSenhaConfirmar'].forEach(sel => {
+    if ($(sel)) $(sel).value = '';
+  });
+}
+
+async function salvarNome() {
+  const nome = $('#perfilNomeInput').value.trim();
+  if (!nome) { toast('Informe o nome.', 'aviso'); return; }
+  try {
+    const payloadNome = { nome: nome };
+    const r = await api('/api/me/profile', { method: 'PUT', body: payloadNome });
+    perfilAtual = r.user;
+    aplicarNomeNoCabecalho(perfilAtual.nome);
+    renderPerfil();
+    toast(r.message || 'Nome atualizado.');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
+}
+
+async function salvarEmail() {
+  const email = $('#perfilEmailNovo').value.trim();
+  const senhaAtual = $('#perfilEmailSenha').value;
+  if (!email || !senhaAtual) { toast('Informe o novo e-mail e a senha atual.', 'aviso'); return; }
+  try {
+    const payloadEmail = { email: email, senhaAtual: senhaAtual };
+    const r = await api('/api/me/email', { method: 'PUT', body: payloadEmail });
+    perfilAtual = r.user;
+    renderPerfil();
+    toast(r.message || 'E-mail atualizado.');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
+}
+
+async function salvarSenha() {
+  const senhaAtual = $('#perfilSenhaAtual').value;
+  const novaSenha = $('#perfilSenhaNova').value;
+  const confirmarNovaSenha = $('#perfilSenhaConfirmar').value;
+  if (!senhaAtual || !novaSenha) { toast('Preencha a senha atual e a nova senha.', 'aviso'); return; }
+  if (novaSenha !== confirmarNovaSenha) { toast('A confirmação da nova senha não confere.', 'erro'); return; }
+  try {
+    const payloadSenha = { senhaAtual: senhaAtual, novaSenha: novaSenha, confirmarNovaSenha: confirmarNovaSenha };
+    const r = await api('/api/me/password', { method: 'PUT', body: payloadSenha });
+    ['#perfilSenhaAtual', '#perfilSenhaNova', '#perfilSenhaConfirmar'].forEach(sel => { if ($(sel)) $(sel).value = ''; });
+    toast(r.message || 'Senha alterada com sucesso.');
+  } catch (e) {
+    toast(e.message, 'erro');
+  }
+}
+
+function aplicarNomeNoCabecalho(nome) {
+  if (!nome) return;
+  const avatar = document.querySelector('.avatar .name');
+  if (avatar) avatar.textContent = nome;
+  const hello = $('#helloText');
+  if (hello) hello.textContent = `Olá, ${nome} 👋`;
 }
 
 // ============================================================
@@ -2920,56 +3165,109 @@ function bindEventos() {
   // ----- Etiqueta -----
   $('#btnImprimirEtiqueta').addEventListener('click', () => window.print());
 
-  // ----- Tema -----
-  $('#btnPersonalizarTema').addEventListener('click', abrirPersonalizacao);
-  $('#navPersonalizarTema').addEventListener('click', (e) => { e.preventDefault(); abrirPersonalizacao(); });
-  $('#btnSalvarTema').addEventListener('click', salvarTema);
-  $('#btnRestaurarTemaPadrao').addEventListener('click', restaurarTemaPadrao);
-  $('#btnConfirmarRestauracaoTema').addEventListener('click', confirmarRestauracaoTema);
-  $('#themeColorPrimary').addEventListener('input', (e) => { $('#themeColorPrimaryHex').textContent = e.target.value; });
-  $('#themeColorBg').addEventListener('input', (e) => { $('#themeColorBgHex').textContent = e.target.value; });
-  $('#themeColorCard').addEventListener('input', (e) => { $('#themeColorCardHex').textContent = e.target.value; });
-  $('#themeBgOpacity').addEventListener('input', (e) => { $('#themeBgOpacityVal').textContent = `${e.target.value}%`; });
-  $('#themeBgBlur').addEventListener('input', (e) => { $('#themeBgBlurVal').textContent = `${e.target.value}px`; });
-  $('#themeWallpaperFileInput').addEventListener('change', (e) => {
-    const arquivo = e.target.files[0];
+  // ----- Personalização (abre o modal completo de personalização) -----
+  if ($('#btnPersonalizarTema')) $('#btnPersonalizarTema').addEventListener('click', abrirPersonalizacao);
+  if ($('#navPersonalizarTema')) $('#navPersonalizarTema').addEventListener('click', (e) => { e.preventDefault(); abrirPersonalizacao(); });
+  if ($('#btnSalvarTema')) $('#btnSalvarTema').addEventListener('click', salvarPreferencias);
+  if ($('#btnRestaurarTemaPadrao')) $('#btnRestaurarTemaPadrao').addEventListener('click', () => {
+    fecharModal('#modalPersonalizacao');
+    abrirModal('#modalConfirmarResetTema');
+  });
+  if ($('#btnConfirmarRestauracaoTema')) $('#btnConfirmarRestauracaoTema').addEventListener('click', confirmarRestauracaoTema);
+  // Paletas (delegação de clique)
+  if ($('#themePalettesContainer')) {
+    $('#themePalettesContainer').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-palette]');
+      if (card) selecionarPaleta(card.getAttribute('data-palette'));
+    });
+  }
+  // Wallpapers (delegação de clique)
+  if ($('#themeWallpapersContainer')) {
+    $('#themeWallpapersContainer').addEventListener('click', (e) => {
+      const card = e.target.closest('[data-wallpaper]');
+      if (card) selecionarWallpaper(card.getAttribute('data-wallpaper'));
+    });
+  }
+  // Cores customizadas
+  if ($('#themeColorPrimary')) $('#themeColorPrimary').addEventListener('input', (e) => {
+    if (!preferenciasAtuais.paleta) aplicarPreferencias({ cor_destaque: e.target.value });
+    if ($('#themeColorPrimaryHex')) $('#themeColorPrimaryHex').textContent = e.target.value;
+  });
+  if ($('#themeColorBg')) $('#themeColorBg').addEventListener('input', (e) => {
+    aplicarPreferencias({ cor_fundo: e.target.value });
+    if ($('#themeColorBgHex')) $('#themeColorBgHex').textContent = e.target.value;
+  });
+  if ($('#themeColorCard')) $('#themeColorCard').addEventListener('input', (e) => {
+    aplicarPreferencias({ cor_card: e.target.value });
+    if ($('#themeColorCardHex')) $('#themeColorCardHex').textContent = e.target.value;
+  });
+  // Opacidade e desfoque do fundo
+  if ($('#themeBgOpacity')) $('#themeBgOpacity').addEventListener('input', (e) => {
+    if ($('#themeBgOpacityVal')) $('#themeBgOpacityVal').textContent = `${e.target.value}%`;
+    aplicarPreferencias({ wallpaper_opacidade: parseInt(e.target.value, 10) || 85 });
+  });
+  if ($('#themeBgBlur')) $('#themeBgBlur').addEventListener('input', (e) => {
+    if ($('#themeBgBlurVal')) $('#themeBgBlurVal').textContent = `${e.target.value}px`;
+    aplicarPreferencias({ wallpaper_blur: parseInt(e.target.value, 10) || 0 });
+  });
+  // Upload de imagem de fundo (lê como dataURL e aplica na hora)
+  if ($('#themeWallpaperFileInput')) $('#themeWallpaperFileInput').addEventListener('change', (e) => {
+    const arquivo = e.target.files && e.target.files[0];
     if (!arquivo) return;
+    if (arquivo.size > 2 * 1024 * 1024) { toast('Imagem muito grande (máx. ~2MB).', 'erro'); return; }
     const reader = new FileReader();
     reader.onload = () => {
-      window.__temaWallpaper = `url(${reader.result})`;
-      $('#themeBgControlsContainer').style.display = 'block';
-      toast('Imagem carregada! Clique em Salvar para aplicar.');
+      window.__prefWallpaper = 'custom';
+      window.__prefWallpaperImagem = String(reader.result);
+      preferenciasAtuais.wallpaper = 'custom';
+      preferenciasAtuais.wallpaper_imagem = window.__prefWallpaperImagem;
+      if ($('#themeBgControlsContainer')) $('#themeBgControlsContainer').style.display = 'block';
+      aplicarPreferencias({ wallpaper: 'custom', wallpaper_imagem: window.__prefWallpaperImagem });
+      toast('Imagem carregada! Clique em Salvar para gravar.');
     };
     reader.readAsDataURL(arquivo);
   });
-  $('#btnRemoverFundo').addEventListener('click', () => {
-    window.__temaWallpaper = null;
-    $('#themeBgControlsContainer').style.display = 'none';
-    $$('.theme-wallpaper-card').forEach(c => c.classList.remove('active'));
+  if ($('#btnRemoverFundo')) $('#btnRemoverFundo').addEventListener('click', () => {
+    window.__prefWallpaper = 'none';
+    window.__prefWallpaperImagem = null;
+    preferenciasAtuais.wallpaper = 'none';
+    preferenciasAtuais.wallpaper_imagem = null;
+    if ($('#themeBgControlsContainer')) $('#themeBgControlsContainer').style.display = 'none';
+    aplicarPreferencias({ wallpaper: 'none', wallpaper_imagem: null });
+    marcarSelecoesPersonalizacao();
+  });
+  // Seleção rápida de cor principal / tema (aplicam ao vivo; o Salvar persiste)
+  if ($('#prefCorPrincipal')) $('#prefCorPrincipal').addEventListener('change', (e) => {
+    preferenciasAtuais.cor_principal = e.target.value;
+    aplicarPreferencias({ cor_principal: e.target.value });
+  });
+  if ($('#prefTema')) $('#prefTema').addEventListener('change', (e) => {
+    preferenciasAtuais.tema = e.target.value;
+    aplicarPreferencias({ tema: e.target.value });
   });
 
   // ----- Logout -----
   $('#logoutBtn').addEventListener('click', async () => {
     try { await api('/api/auth/logout', { method: 'POST' }); } catch (e) {}
-    localStorage.removeItem('biblioteca_auth_v1');
     window.location.href = './login.html';
   });
 
-  // Exibe nome do usuário logado (via sessão real)
-  (async function(){
-    try {
-      const res = await fetch('/api/auth/session', { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.user && data.user.username) {
-          const avatar = document.querySelector('.avatar .name');
-          if (avatar) avatar.textContent = data.user.username;
-          const hello = $('#helloText');
-          if (hello) hello.textContent = `Olá, ${data.user.username} 👋`;
-        }
-      }
-    } catch (e) {}
-  })();
+  // ----- Meu Perfil -----
+  if ($('#perfilBtn')) $('#perfilBtn').addEventListener('click', abrirPerfil);
+  if ($('#navMeuPerfil')) $('#navMeuPerfil').addEventListener('click', (e) => { e.preventDefault(); abrirPerfil(); });
+  if ($('#salvarNomeBtn')) $('#salvarNomeBtn').addEventListener('click', salvarNome);
+  if ($('#salvarEmailBtn')) $('#salvarEmailBtn').addEventListener('click', salvarEmail);
+  if ($('#salvarSenhaBtn')) $('#salvarSenhaBtn').addEventListener('click', salvarSenha);
+  // Mostrar/ocultar senhas do modal de perfil
+  $$('.toggle-senha-perfil').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const alvo = $(btn.getAttribute('data-toggle'));
+      if (!alvo) return;
+      const visivel = alvo.type === 'text';
+      alvo.type = visivel ? 'password' : 'text';
+      btn.textContent = visivel ? '👁️' : '🙈';
+    });
+  });
 
   // ----- Sidebar mobile -----
   $('#sidebarToggle').addEventListener('click', () => {
@@ -2992,9 +3290,7 @@ function bindEventos() {
 async function init() {
   window.__initPasso = 'inicio';
   try {
-    carregarTema();
-    renderPaletas();
-    renderWallpapers();
+    carregarPreferenciasCache();
     bindEventos();
     $('#emprestimoData').value = hojeISO();
     window.__initPasso = 'setup-ok';
@@ -3025,6 +3321,10 @@ async function init() {
 
   // Painel de backup (status, histórico, config)
   try { await carregarStatusBackup(); } catch (e) { console.error('[init] falha no painel de backup:', e); }
+
+  // Perfil + preferências reais do servidor (fonte da verdade).
+  try { await carregarMeuPerfil(); } catch (e) { console.error('[init] falha ao carregar perfil:', e); }
+  try { await carregarPreferencias(); } catch (e) { console.error('[init] falha ao carregar preferências:', e); }
 }
 
 init().catch(err => {
