@@ -1820,6 +1820,7 @@
 
     /* ===== Combobox pesquisável (dropdowns de aluno/livro) ===== */
     .cb-wrap { position: relative; width: 100%; }
+    .cb-item.ativo { background: #ecfdf5; box-shadow: inset 3px 0 0 var(--primary); }
     .cb-box {
       display: flex; align-items: center; justify-content: space-between;
       gap: 8px; width: 100%; min-height: 46px;
@@ -2391,7 +2392,7 @@
 
           <div class="table-wrap" style="margin-top:0;">
             <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center;">
-              <input id="emprestimoBusca" placeholder="Buscar por aluno, turma, livro ou status..." style="flex:1; min-width: 220px;" />
+              <input id="emprestimoBusca" placeholder="Buscar por aluno, matrícula, turma, livro, autor, ISBN ou status..." style="flex:1; min-width: 220px;" />
               <button type="button" class="secondary btn-small" id="emprestimoLimparBusca">Limpar</button>
             </div>
 

@@ -83,6 +83,7 @@ export function criarCombobox(selectEl, opts = {}) {
   function render(filtroValor = selectEl.value) {
     const filtro = search.value.trim().toLowerCase();
     list.innerHTML = '';
+    indiceAtivo = -1; // lista reconstruída: navegação recomeça
     const visiveis = opcoes.filter(o =>
       o.value !== '' && (!filtro || o.label.toLowerCase().includes(filtro))
     );
@@ -124,6 +125,7 @@ export function criarCombobox(selectEl, opts = {}) {
     wrap.classList.add('open');
     box.setAttribute('aria-expanded', 'true');
     search.value = '';
+    indiceAtivo = -1;
     render();
     panel.style.display = 'block';
     search.focus();
@@ -158,13 +160,56 @@ export function criarCombobox(selectEl, opts = {}) {
   box.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
   });
-  search.addEventListener('input', () => render());
+
+  // ---- Navegação por teclado (Etapa 7) ----
+  // Um único "item ativo" acompanhado por setas ↑/↓; Enter confirma o ativo
+  // (se nada estiver ativo, mantém o comportamento antigo: 1º visível não disabled).
+  let indiceAtivo = -1;
+
+  function itensVisiveis() {
+    return Array.from(list.querySelectorAll('.cb-item')).filter(el => !el.classList.contains('disabled'));
+  }
+
+  function definirAtivo(novoIndice) {
+    const itens = itensVisiveis();
+    if (!itens.length) { indiceAtivo = -1; return; }
+    indiceAtivo = Math.max(0, Math.min(itens.length - 1, novoIndice));
+    itens.forEach((el, i) => {
+      const ativo = i === indiceAtivo;
+      el.classList.toggle('ativo', ativo);
+      if (ativo) {
+        el.setAttribute('aria-selected', 'true');
+        el.scrollIntoView({ block: 'nearest' });
+        search.setAttribute('aria-activedescendant', el.id || '');
+      } else {
+        el.removeAttribute('aria-selected');
+      }
+    });
+  }
+
+  search.addEventListener('input', () => { indiceAtivo = -1; render(); });
   search.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { fechar(); box.focus(); }
+    if (e.key === 'Escape') { fechar(); box.focus(); return; }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!aberto) { abrir(); return; }
+      definirAtivo(indiceAtivo < 0 ? 0 : indiceAtivo + 1);
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (!aberto) { abrir(); return; }
+      definirAtivo(indiceAtivo <= 0 ? 0 : indiceAtivo - 1);
+      return;
+    }
+    if (e.key === 'Home' && aberto) { e.preventDefault(); definirAtivo(0); return; }
+    if (e.key === 'End' && aberto) { e.preventDefault(); definirAtivo(itensVisiveis().length - 1); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
-      const primeiro = list.querySelector('.cb-item:not(.disabled)');
-      if (primeiro) primeiro.click();
+      const itens = itensVisiveis();
+      // Etapa 7: confirma o item ativo se houver; senão, 1º visível (comportamento original).
+      const alvo = (indiceAtivo >= 0 && itens[indiceAtivo]) ? itens[indiceAtivo] : list.querySelector('.cb-item:not(.disabled)');
+      if (alvo) alvo.click();
     }
   });
   document.addEventListener('click', (e) => {

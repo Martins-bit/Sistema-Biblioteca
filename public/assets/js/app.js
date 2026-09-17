@@ -272,14 +272,18 @@ function popularSelectTurmas(select) {
 }
 
 // Popula os dropdowns de Aluno e Livro do formulário de empréstimo
+// Etapa 7: aluno encontrável por nome OU matrícula; livro por título, autor OU ISBN
+// (a busca do combobox filtra pelo texto completo da opção).
 function popularSelectsEmprestimo() {
   const selAluno = $('#emprestimoAluno');
   if (selAluno) {
     const atual = selAluno.value;
     selAluno.innerHTML = '<option value="">Selecione...</option>' +
-      state.alunos.map(a =>
-        `<option value="${a.id}">${escapeHtml(a.nome)} — ${escapeHtml(a.turma)}${a.bloqueado ? ' (BLOQUEADO)' : ''}</option>`
-      ).join('');
+      state.alunos.map(a => {
+        const mat = a.matricula ? ` — Mat. ${a.matricula}` : '';
+        const bloq = a.bloqueado ? ' (BLOQUEADO)' : '';
+        return `<option value="${a.id}">${escapeHtml(a.nome)} — ${escapeHtml(a.turma)}${escapeHtml(mat)}${bloq}</option>`;
+      }).join('');
     if (atual && state.alunos.some(a => String(a.id) === String(atual))) selAluno.value = atual;
     if (selAluno.__combobox) selAluno.__combobox.sync();
   }
@@ -290,8 +294,10 @@ function popularSelectsEmprestimo() {
     selLivro.innerHTML = '<option value="">Selecione...</option>' +
       state.livros.map(l => {
         const disp = disponiveisLivro(l.id);
-        const sufixo = disp > 0 ? `(${disp} disponível(is))` : '(sem exemplares disponíveis)';
-        return `<option value="${l.id}" ${disp === 0 ? 'disabled' : ''}>${escapeHtml(l.titulo)} ${sufixo}</option>`;
+        const sufixo = disp > 0 ? ` (${disp} disponível(is))` : ' (sem exemplares disponíveis)';
+        const autor = l.autor ? ` — ${l.autor}` : '';
+        const isbn = l.isbn ? ` — ISBN ${l.isbn}` : '';
+        return `<option value="${l.id}" ${disp === 0 ? 'disabled' : ''}>${escapeHtml(l.titulo)}${escapeHtml(autor)}${escapeHtml(isbn)}${sufixo}</option>`;
       }).join('');
     if (atual && state.livros.some(l => String(l.id) === String(atual))) selLivro.value = atual;
     if (selLivro.__combobox) selLivro.__combobox.sync();
@@ -328,7 +334,7 @@ function atualizarSituacaoEmprestimo() {
 
   box.style.display = 'block';
   box.innerHTML = `
-    <b>${escapeHtml(aluno.nome)} — ${escapeHtml(aluno.turma)}</b><br/>
+    <b>${escapeHtml(aluno.nome)} — ${escapeHtml(aluno.turma)}${aluno.matricula ? ` — Mat. ${escapeHtml(aluno.matricula)}` : ''}</b><br/>
     Avaliação: <span class="stars small">${escapeHtml(aluno.estrelas || '☆☆☆☆☆')}</span> ${notaFmt}<br/>
     ${detalhe}
   `;
@@ -1690,7 +1696,8 @@ function renderEmprestimos() {
     if (filtro === 'devolvidos' && !e.devolvido) return false;
     if (filtro !== 'todos' && filtro !== 'devolvidos' && st.chave !== filtro) return false;
     if (busca) {
-      const alvo = `${e.alunoNome} ${e.alunoTurma} ${e.livroTitulo} ${st.label}`.toLowerCase();
+      // Etapa 7: busca também por matrícula, autor e ISBN.
+      const alvo = `${e.alunoNome} ${e.alunoTurma} ${e.alunoMatricula || ''} ${e.livroTitulo} ${e.livroAutor || ''} ${e.livroIsbn || ''} ${st.label}`.toLowerCase();
       if (!alvo.includes(busca)) return false;
     }
     return true;
@@ -1712,8 +1719,8 @@ function renderEmprestimos() {
       conservacao = `${escapeHtml(e.estadoSaida || '?')} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao || '?')}</strong>${piorou ? ' ⚠️' : ''}`;
     }
     return `<tr>
-      <td>${escapeHtml(e.alunoNome)}<br/><small class="muted">${escapeHtml(e.alunoTurma)}</small></td>
-      <td>${escapeHtml(e.livroTitulo)}</td>
+      <td>${escapeHtml(e.alunoNome)}${e.alunoMatricula ? `<br/><small class="muted">Mat. ${escapeHtml(e.alunoMatricula)}</small>` : ''}<br/><small class="muted">${escapeHtml(e.alunoTurma)}</small></td>
+      <td>${escapeHtml(e.livroTitulo)}${e.livroIsbn ? `<br/><small class="muted">ISBN ${escapeHtml(e.livroIsbn)}</small>` : ''}</td>
       <td>${formatarData(e.dataRetirada)}</td>
       <td>${formatarData(e.dataLimite)}</td>
       <td>${pillStatus(e)}</td>
@@ -1748,6 +1755,20 @@ async function registrarEmprestimo() {
     return;
   }
 
+  // Livro indisponível também bloqueado no frontend (o backend recusa de qualquer forma)
+  const livroSel = state.livros.find(l => String(l.id) === String(livroId));
+  if (livroSel && disponiveisLivro(livroSel.id) <= 0) {
+    toast(`Não há exemplares disponíveis de "${livroSel.titulo}".`, 'erro');
+    return;
+  }
+
+  // Etapa 7: proteção contra submissão duplicada (duplo clique / Enter repetido).
+  const btn = $('#emprestarBtn');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const rotuloOriginal = btn.textContent;
+  btn.textContent = 'Registrando...';
+
   const limite = new Date(dataRetirada + 'T00:00:00');
   limite.setDate(limite.getDate() + prazo);
   const dataLimite = limite.toISOString().split('T')[0];
@@ -1759,9 +1780,14 @@ async function registrarEmprestimo() {
     });
     toast('Empréstimo registrado com sucesso!');
     $('#emprestimoObsSaida').value = '';
+    $('#emprestimoAluno').value = '';
+    if ($('#emprestimoAluno').__combobox) $('#emprestimoAluno').__combobox.sync();
     await recarregarTudo();
   } catch (err) {
     toast(err.message, 'erro');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = rotuloOriginal;
   }
 }
 
@@ -1770,7 +1796,8 @@ function abrirDevolucao(id) {
   if (!e) return;
   state.devolucaoEmprestimoId = id;
 
-  $('#devolucaoInfo').textContent = `${e.alunoNome} (${e.alunoTurma}) — "${e.livroTitulo}"`;
+  const mat = e.alunoMatricula ? ` — Mat. ${e.alunoMatricula}` : '';
+  $('#devolucaoInfo').textContent = `${e.alunoNome} (${e.alunoTurma})${mat} — "${e.livroTitulo}"`;
   $('#devolucaoEstadoSaida').textContent = e.estadoSaida || 'Não registrado';
   $('#devolucaoEstado').value = e.estadoSaida || 'Bom';
   $('#devolucaoObs').value = '';
@@ -1792,20 +1819,31 @@ function atualizarComparacaoDevolucao() {
 
 async function confirmarDevolucao() {
   const id = state.devolucaoEmprestimoId;
+  if (!id) return;
   const dataDevolucao = $('#devolucaoData').value || hojeISO();
   const estadoDevolucao = $('#devolucaoEstado').value;
   const obsDevolucao = $('#devolucaoObs').value.trim();
+
+  // Etapa 7: proteção contra submissão duplicada (duplo clique).
+  const btn = $('#confirmarDevolucaoBtn');
+  if (btn && btn.disabled) return;
+  if (btn) { btn.disabled = true; }
+  const rotuloOriginal = btn ? btn.textContent : null;
+  if (btn) btn.textContent = 'Registrando...';
 
   try {
     await api(`/api/emprestimos/${id}`, {
       method: 'PUT',
       body: { dataDevolucao, estadoDevolucao, obsDevolucao: obsDevolucao || null }
     });
+    state.devolucaoEmprestimoId = null;
     fecharModal('#modalDevolucao');
     toast('Devolução registrada com sucesso! Reputação do aluno atualizada.');
     await recarregarTudo();
   } catch (err) {
     toast(err.message, 'erro');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = rotuloOriginal; }
   }
 }
 
@@ -1822,7 +1860,9 @@ async function abrirHistorico(id) {
 
     $('#historicoConteudo').innerHTML = `
       ${linha('Aluno', `${escapeHtml(e.alunoNome)} (${escapeHtml(e.alunoTurma)})`)}
+      ${e.alunoMatricula ? linha('Matrícula', escapeHtml(e.alunoMatricula)) : ''}
       ${linha('Livro', `${escapeHtml(e.livroTitulo)} — ${escapeHtml(e.livroAutor || '')}`)}
+      ${e.livroIsbn ? linha('ISBN', escapeHtml(e.livroIsbn)) : ''}
       ${linha('Data de retirada', formatarData(e.dataRetirada))}
       ${linha('Prazo limite', formatarData(e.dataLimite))}
       ${linha('Status', e.devolvido ? 'Devolvido' : pillStatus(e))}
