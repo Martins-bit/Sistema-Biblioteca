@@ -9,6 +9,7 @@ require('./db');
 
 const requireAuth = require('./middleware/requireAuth');
 const authRoutes = require('./routes/auth');
+const meRoutes = require('./routes/me');
 const alunosRoutes = require('./routes/alunos');
 const livrosRoutes = require('./routes/livros');
 const emprestimosRoutes = require('./routes/emprestimos');
@@ -41,6 +42,7 @@ app.use(session({
 }));
 
 app.use('/api/auth', authRoutes);
+app.use('/api/me', requireAuth, meRoutes);
 app.use('/api/alunos', requireAuth, alunosRoutes);
 app.use('/api/livros', requireAuth, livrosRoutes);
 app.use('/api/emprestimos', requireAuth, emprestimosRoutes);
@@ -123,7 +125,8 @@ const server = app.listen(PORT, async () => {
     const livroTitulo = 'Livro Algoritmos ' + Math.floor(Math.random() * 1000);
     await page.fill('#livroTitulo', livroTitulo);
     await page.fill('#livroAutor', 'Alan Turing');
-    await page.selectOption('#livroCategoria', 'Ficção Científica');
+    // Categoria agora é texto livre (ver app.js/popularSelectsCategorias).
+    await page.fill('#livroCategoria', 'Ficção Científica');
     await page.fill('#livroAcervo', '4');
     await page.click('#livroForm button[type="submit"]');
     await page.waitForTimeout(800);
@@ -141,10 +144,10 @@ const server = app.listen(PORT, async () => {
       await page.waitForTimeout(200);
     }
 
-    // 6. Testar Scanner QR Code
+    // 6. Testar Scanner QR Code (modal abre com classe 'show' — ver abrirModal em app.js)
     await page.click('#btnAbrirScannerLivro');
     await page.waitForTimeout(300);
-    const isScannerAtivo = await page.$eval('#modalQrScanner', el => el.classList.contains('active'));
+    const isScannerAtivo = await page.$eval('#modalQrScanner', el => el.classList.contains('show'));
     testAssert(isScannerAtivo, 'Modal do Leitor QR Code / Código de Barras abre corretamente');
     await page.click('#btnFecharScanner');
     await page.waitForTimeout(200);
@@ -173,17 +176,17 @@ const server = app.listen(PORT, async () => {
     const isPrateleiraVisivel = await page.$eval('#secEstante', el => el.classList.contains('active') || !el.classList.contains('hidden'));
     testAssert(isPrateleiraVisivel, 'Seção Prateleira Virtual carregada com sucesso');
 
-    const spinesCount = await page.$$eval('.shelf-book-spine', el => el.length);
+    const spinesCount = await page.$$eval('.spine-book', el => el.length);
     testAssert(spinesCount > 0, `Estante 3D renderizou ${spinesCount} lombadas de livros`);
 
     // Alternar para Modo Catálogo
     await page.click('#btnViewGrid');
     await page.waitForTimeout(400);
-    const cardsCount = await page.$$eval('.shelf-book-card', el => el.length);
+    const cardsCount = await page.$$eval('.estante-card', el => el.length);
     testAssert(cardsCount > 0, `Modo Catálogo exibiu ${cardsCount} cards de livros`);
 
     // Agrupar por Autor
-    await page.selectOption('#estanteGroupBy', 'autor');
+    await page.selectOption('#shelfGroupBy', 'autor');
     await page.waitForTimeout(300);
     const racksCount = await page.$$eval('.shelf-rack', el => el.length);
     testAssert(racksCount > 0, `Prateleiras organizadas dinamicamente por autor (${racksCount} prateleiras)`);

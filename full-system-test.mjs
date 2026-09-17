@@ -87,7 +87,7 @@ async function runTests() {
 
   await page.type('#alunoNome', 'Carlos Eduardo Teste');
   await page.type('#alunoTurma', '3º Ano B');
-  await page.type('#alunoMatricula', 'MAT-9988');
+  await page.type('#alunoMatricula', '9988');
   await page.click('#formAluno button[type="submit"]');
   await page.waitForTimeout(400);
 

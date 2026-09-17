@@ -116,6 +116,8 @@ const state = {
   buscaEmprestimo: '',
   ordemLivros: 'alfabetica-asc',
   shelf: { groupBy: 'categoria', sortBy: 'titulo-asc', categoria: '', genero: '', classificacao: 'todos', localizacao: 'todos', status: '', busca: '' },
+  dedPreview: null,       // prévia recebida do servidor (importação DED)
+  dedMapeamentos: null,   // prévia ajustada com os mapeamentos escolhidos
   shelfView: 'spines', // 'spines' = estante de madeira | 'grid' = catálogo de cards
   rankingTab: 'alunos',
   relatorioAtual: null, // dados do último relatório gerado (para CSV/impressão)
@@ -256,7 +258,6 @@ async function carregarTurmas() {
     state.turmas = data.turmas || [];
     popularSelectTurmas($('#alunoTurma'));
     popularSelectTurmas($('#editarAlunoTurma'));
-    popularSelectTurmas($('#dedTurmaPadrao'));
   } catch (e) {
     console.error('Erro ao carregar turmas:', e);
   }
@@ -455,7 +456,8 @@ function renderDashboard() {
 function renderAlunos() {
   const busca = state.buscaAluno.trim().toLowerCase();
   const lista = state.alunos.filter(a =>
-    !busca || a.nome.toLowerCase().includes(busca) || String(a.turma).toLowerCase().includes(busca)
+    !busca || a.nome.toLowerCase().includes(busca) || String(a.turma).toLowerCase().includes(busca) ||
+    (a.matricula ? String(a.matricula).toLowerCase().includes(busca) : false)
   );
 
   $('#alunosCountSmall').textContent = `${state.alunos.length} aluno(s)`;
@@ -471,6 +473,7 @@ function renderAlunos() {
   tbody.innerHTML = lista.map(a => `
     <tr>
       <td>${escapeHtml(a.nome)}</td>
+      <td>${a.matricula ? `<code>${escapeHtml(a.matricula)}</code>` : '<span class="muted">—</span>'}</td>
       <td><span class="pill">${escapeHtml(a.turma)}</span></td>
       <td>${a.total ?? 0} (${a.ativos ?? 0} ativo(s))</td>
       <td>${renderEstrelas(a.nota, a.estrelas)} ${situacaoBadgeHTML(a)}</td>
@@ -487,14 +490,17 @@ function renderAlunos() {
 async function cadastrarAluno(e) {
   e.preventDefault();
   const nome = $('#alunoNome').value.trim();
+  const matricula = $('#alunoMatricula').value.trim();
   const turma = $('#alunoTurma').value;
 
   if (!nome) { toast('Informe o nome do aluno.', 'erro'); return; }
+  if (matricula && !/^\d+$/.test(matricula)) { toast('A matrícula deve conter somente números.', 'erro'); return; }
   if (!turma) { toast('Selecione a sala/turma.', 'erro'); return; }
 
   try {
-    await api('/api/alunos', { method: 'POST', body: { nome, turma } });
+    await api('/api/alunos', { method: 'POST', body: { nome, matricula: matricula || null, turma } });
     $('#alunoNome').value = '';
+    $('#alunoMatricula').value = '';
     $('#alunoTurma').value = '';
     toast(`Aluno "${nome}" cadastrado com sucesso!`);
     await recarregarTudo();
@@ -508,6 +514,7 @@ function abrirEditarAluno(id) {
   if (!aluno) return;
   state.editandoAlunoId = id;
   $('#editarAlunoNome').value = aluno.nome;
+  $('#editarAlunoMatricula').value = aluno.matricula || '';
   popularSelectTurmas($('#editarAlunoTurma'));
   $('#editarAlunoTurma').value = aluno.turma;
   abrirModal('#modalEditarAluno');
@@ -515,12 +522,14 @@ function abrirEditarAluno(id) {
 
 async function salvarEdicaoAluno() {
   const nome = $('#editarAlunoNome').value.trim();
+  const matricula = $('#editarAlunoMatricula').value.trim();
   const turma = $('#editarAlunoTurma').value;
   if (!nome) { toast('Informe o nome do aluno.', 'erro'); return; }
+  if (matricula && !/^\d+$/.test(matricula)) { toast('A matrícula deve conter somente números.', 'erro'); return; }
   if (!turma) { toast('Selecione a sala/turma.', 'erro'); return; }
 
   try {
-    await api(`/api/alunos/${state.editandoAlunoId}`, { method: 'PUT', body: { nome, turma } });
+    await api(`/api/alunos/${state.editandoAlunoId}`, { method: 'PUT', body: { nome, matricula: matricula || null, turma } });
     fecharModal('#modalEditarAluno');
     toast('Aluno atualizado com sucesso!');
     await recarregarTudo();
@@ -544,119 +553,261 @@ async function excluirAluno(id) {
 
 function exportarAlunos() {
   baixarCSV('alunos.csv', [
-    ['Nome', 'Turma', 'Empréstimos', 'Devolvidos', 'Atrasos', 'Nota', 'Estrelas'],
-    ...state.alunos.map(a => [a.nome, a.turma, a.total ?? 0, a.concluidos ?? 0, a.atrasos ?? 0, a.nota ?? 5, a.estrelas ?? ''])
+    ['Nome', 'Matrícula', 'Turma', 'Empréstimos', 'Devolvidos', 'Atrasos', 'Nota', 'Estrelas'],
+    ...state.alunos.map(a => [a.nome, a.matricula ?? '', a.turma, a.total ?? 0, a.concluidos ?? 0, a.atrasos ?? 0, a.nota ?? 5, a.estrelas ?? ''])
   ]);
 }
 
-// ---------------- Importação DED ----------------
+// ---------------- Importação DED (Etapa 6B) ----------------
+// Fluxo em 5 etapas: arquivo -> mapear turmas -> prévia -> confirmar -> resumo.
+// Nada é gravado antes da confirmação final (POST /api/alunos/ded/confirmar).
 
-function parseDedTexto(texto, turmaPadrao) {
-  const resultados = [];
-  const linhas = String(texto || '').split(/\r?\n/);
-  const turmas = /^(?:\d{1,2}\s*(?:°|º|o)?\s*[A-Da-d])$/;
-
-  for (let linha of linhas) {
-    linha = linha.trim();
-    if (!linha) continue;
-
-    let partes = linha.includes(';') ? linha.split(';') : (linha.includes('\t') ? linha.split('\t') : null);
-    if (partes && partes.length >= 2) {
-      partes = partes.map(parte => parte.trim().replace(/^"|"$/g, ''));
-      if (/nome|aluno|matr[íi]cula|turma/i.test(linha) && /nome|aluno/i.test(linha)) continue;
-      const turma = partes.find(parte => turmas.test(parte.replace(/\s*ANO\s*/i, ' '))) || turmaPadrao || '';
-      const nome = partes.find(parte => /[a-zA-ZÀ-ÿ]/.test(parte) && !turmas.test(parte) && !/^(matr[íi]cula|aluno|nome)$/i.test(parte) && !/^\d+$/.test(parte));
-      if (nome && nome.length > 2) {
-        resultados.push({ nome, turma });
-        continue;
-      }
-    }
-
-    // Formato colunar: "1  1234567  Maria Silva Santos  7ºA"
-    const colunas = linha.split(/\s{2,}|\t+/).map(s => s.trim()).filter(Boolean);
-    if (colunas.length >= 2) {
-      const turmaCand = colunas.find(coluna => turmas.test(coluna.replace(/\s*ANO\s*/i, ' ')));
-      const pareceTurma = !!turmaCand;
-      if (pareceTurma) {
-        const nome = colunas.filter(c => c !== turmaCand && !/^\d+$/.test(c) && !/^(matr[íi]cula|aluno|nome)$/i.test(c)).join(' ');
-        if (nome && nome.length > 2) {
-          resultados.push({ nome, turma: turmaCand });
-          continue;
-        }
-      }
-    }
-
-    // Linha simples: nome no meio, turma no fim (ex.: "1 1234567 Maria Silva 7ºA")
-    const m = linha.match(/^(?:\d+\s+)?(?:\d{4,}\s+)?(.+?)\s+(\d{1,2}\s*[°º]?\s*[A-Da-d])$/);
-    if (m) {
-      const nome = m[1].replace(/\s{2,}/g, ' ').trim();
-      if (nome.length > 2 && !/^\d+$/.test(nome)) {
-        resultados.push({ nome, turma: m[2] });
-        continue;
-      }
-    }
-
-    // Apenas nome (usa turma padrão)
-    const soNome = linha.replace(/^\d+\s+/, '').replace(/^\d{4,}\s+/, '').trim();
-    if (soNome.length > 2 && /[a-zA-ZÀ-ÿ]/.test(soNome) && !/^\d+$/.test(soNome) && turmaPadrao) {
-      resultados.push({ nome: soNome, turma: turmaPadrao });
-    }
-  }
-  return resultados;
+function dedMensagem(elem, texto, tipo) {
+  const el = $(elem);
+  if (!texto) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.style.display = 'block';
+  el.className = 'status-pill ' + (tipo === 'erro' ? 'badge-danger' : tipo === 'aviso' ? 'badge-warning' : 'badge-ok');
+  el.textContent = texto; // textContent: nunca insere HTML vindo do arquivo (XSS)
 }
 
-function processarDed() {
-  const texto = $('#dedTextoInput').value;
-  const turmaPadrao = $('#dedTurmaPadrao').value;
-  if (!texto.trim()) { toast('Cole o texto ou carregue um arquivo primeiro.', 'aviso'); return; }
+function limparEstadoDed() {
+  // Novo arquivo não pode herdar dados da importação anterior.
+  state.dedPreview = null;
+  state.dedMapeamentos = {};
+  $('#dedArquivoInput').value = '';
+  $('#dedMensagemArquivo').style.display = 'none';
+  $('#dedMensagemArquivo').textContent = '';
+  $('#dedEtapaMapeamento').style.display = 'none';
+  $('#dedEtapaPrevia').style.display = 'none';
+  $('#dedEtapaResumo').style.display = 'none';
+  $('#dedMapeamentoBody').innerHTML = '';
+  $('#dedPreviewBody').innerHTML = '';
+  $('#btnDedConfirmarImportacao').disabled = true;
+}
 
-  const alunos = parseDedTexto(texto, turmaPadrao);
-  if (!alunos.length) {
-    toast('Nenhum aluno identificado. Verifique o formato.', 'aviso');
+const DED_ACOES = {
+  NOVO:            { rotulo: '✓ Novo', cor: '#15803d' },
+  ATUALIZAR:       { rotulo: '↻ Atualizar', cor: '#1d4ed8' },
+  CONFLITO:        { rotulo: '⚠ Conflito', cor: '#b45309' },
+  CORRESPONDENCIA: { rotulo: '⏸ Possível correspondência', cor: '#7c3aed' },
+  IGNORAR:         { rotulo: '⏸ Ignorar', cor: '#6b7280' },
+  INVALIDO:        { rotulo: '✕ Inválido', cor: '#dc2626' }
+};
+
+async function processarDed(arquivo) {
+  if (!arquivo) return;
+  const ext = arquivo.name.toLowerCase().split('.').pop();
+  if (!['csv', 'txt', 'tsv'].includes(ext)) {
+    dedMensagem('#dedMensagemArquivo', 'Formato não suportado. Envie um arquivo CSV, TXT ou TSV.', 'erro');
     return;
   }
 
-  state.dedPreview = alunos;
-  $('#dedTotalEncontrados').textContent = alunos.length;
-  $('#dedPreviewContainer').style.display = 'block';
+  const fd = new FormData();
+  fd.append('arquivo', arquivo);
+  try {
+    const t = await obterCsrfToken();
+    const res = await fetch('/api/alunos/ded/preview', {
+      method: 'POST',
+      headers: t ? { 'X-CSRF-Token': t } : {},
+      credentials: 'include',
+      body: fd
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      dedMensagem('#dedMensagemArquivo', data.error || 'Não foi possível ler o arquivo.', 'erro');
+      return;
+    }
+    state.dedPreview = data;
+    montarMapeamentoDed(data);
+  } catch (err) {
+    dedMensagem('#dedMensagemArquivo', err.message || 'Erro ao enviar o arquivo.', 'erro');
+  }
+}
 
-  const nomesExistentes = new Set(state.alunos.map(a => a.nome.toLowerCase()));
-  $('#dedPreviewBody').innerHTML = alunos.map((a, i) => {
-    const duplicado = $('#dedIgnorarDuplicados').checked && nomesExistentes.has(a.nome.toLowerCase());
+function montarMapeamentoDed(preview) {
+  // Mapeamentos previamente confirmados vêm pré-selecionados do servidor.
+  const salvos = new Map((preview.mapeamentosSalvos || []).map(m => [m.turma_ded, m.turma_sistema]));
+  const corpo = $('#dedMapeamentoBody');
+  corpo.innerHTML = preview.turmasArquivo.map((t, i) => {
+    const salvo = salvos.has(t) ? (salvos.get(t) || '') : '';
+    return `
+      <div class="row two" style="align-items:center; margin-bottom:8px;">
+        <div style="font-weight:700; font-size:13px;">${escapeHtml(t)}</div>
+        <div>
+          <select class="ded-map-select" data-turma-ded="${escapeHtml(t)}" style="width:100%;">
+            <option value="">-- Escolha --</option>
+            <option value="__IGNORAR__" ${salvo === '__IGNORAR__' ? 'selected' : ''}>Ignorar</option>
+            ${state.turmas.map(ts => `<option value="${escapeHtml(ts)}" ${salvo === ts ? 'selected' : ''}>${escapeHtml(ts)}</option>`).join('')}
+          </select>
+        </div>
+      </div>`;
+  }).join('');
+
+  $('#dedEtapaMapeamento').style.display = 'block';
+  $('#dedEtapaPrevia').style.display = 'none';
+  $('#dedEtapaResumo').style.display = 'none';
+  dedMensagem('#dedMensagemArquivo', `Arquivo "${preview.arquivo}" lido: ${preview.preview.length} linha(s), ${preview.turmasArquivo.length} turma(s). Separador: ${escapeHtml(preview.separador)}.`, 'ok');
+}
+
+function gerarPreviaDed() {
+  const preview = state.dedPreview;
+  if (!preview) return;
+
+  // Coleta os mapeamentos escolhidos na tela.
+  const escolhas = {};
+  let faltando = 0;
+  $$('.ded-map-select').forEach(sel => {
+    const td = sel.getAttribute('data-turma-ded');
+    let v = sel.value || '';
+    if (v === '__IGNORAR__') v = '';
+    if (v) escolhas[td] = v; else if (!salvosMapaDed().has(td)) faltando++;
+  });
+
+  if (faltando > 0) {
+    toast('Existem turmas sem mapeamento. Escolha uma turma ou "Ignorar".', 'aviso');
+    return;
+  }
+
+  // Salva os mapeamentos confirmados no servidor (reuso nas próximas importações).
+  const itens = $$('.ded-map-select').map(sel => ({
+    turmaDed: sel.getAttribute('data-turma-ded'),
+    turmaSistema: (sel.value === '__IGNORAR__' || !sel.value) ? null : sel.value
+  }));
+  api('/api/alunos/ded/mapeamento', { method: 'PUT', body: { mapeamentos: itens } }).catch(() => {});
+
+  // Refaz a prévia com os mapeamentos escolhidos aplicados localmente.
+  const previewAjustada = preview.preview.map(p => {
+    const escolha = escolhas[p.turmaDed] !== undefined ? escolhas[p.turmaDed] : null;
+    const ignorada = itens.find(i => i.turmaDed === p.turmaDed && i.turmaSistema === null);
+    const copia = { ...p };
+    if (ignorada && p.acao !== 'INVALIDO') {
+      copia.acao = 'IGNORAR';
+      copia.turmaSistema = null;
+      copia.motivo = 'Turma marcada para ignorar no mapeamento.';
+    } else if (escolha) {
+      copia.turmaSistema = escolha;
+      if (p.acao === 'INVALIDO' && p.motivo === 'Turma requer mapeamento.') {
+        recalcularAcaoDed(copia, preview);
+      }
+    }
+    return copia;
+  });
+
+  state.dedMapeamentos = previewAjustada;
+  renderizarPreviaDed(previewAjustada);
+  $('#dedEtapaMapeamento').style.display = 'none';
+  $('#dedEtapaPrevia').style.display = 'block';
+}
+
+// Reavalia NOVO/ATUALIZAR/CORRESPONDENCIA depois do mapeamento escolhido.
+function recalcularAcaoDed(item, preview) {
+  item.motivo = '';
+  if (!item.matricula && (!item.nome || !item.turmaSistema)) {
+    item.acao = 'INVALIDO'; item.motivo = 'Linha incompleta.'; return;
+  }
+  const existente = item.matricula
+    ? state.alunos.find(a => a.matricula === item.matricula)
+    : null;
+  if (existente) {
+    item.acao = 'ATUALIZAR';
+    item.alunoExistenteId = existente.id;
+    item.nomeAnterior = existente.nome;
+    item.turmaAnterior = existente.turma;
+    item.motivo = `Atualizar aluno #${existente.id}`;
+    return;
+  }
+  if (!item.matricula) {
+    const homonimo = state.alunos.find(a =>
+      !a.matricula && a.nome.toLowerCase() === item.nome.toLowerCase() && a.turma === item.turmaSistema);
+    if (homonimo) {
+      item.acao = 'CORRESPONDENCIA';
+      item.correspondencias = [{ id: homonimo.id, nome: homonimo.nome, turma: homonimo.turma }];
+      item.motivo = 'Possível correspondência por nome — confirme para vincular ou criar novo.';
+      return;
+    }
+  }
+  item.acao = 'NOVO';
+  item.motivo = 'Criar novo aluno';
+}
+
+function salvosMapaDed() {
+  const p = state.dedPreview;
+  return new Map((p && p.mapeamentosSalvos ? p.mapeamentosSalvos : []).map(m => [m.turma_ded, m.turma_sistema]));
+}
+
+function renderizarPreviaDed(linhas) {
+  const contagem = linhas.reduce((acc, p) => { acc[p.acao] = (acc[p.acao] || 0) + 1; return acc; }, {});
+  $('#dedTotalPreview').textContent = linhas.length;
+  $('#dedResumoPreview').textContent = linhas.map(l => {
+    const info = DED_ACOES[l.acao] || { rotulo: l.acao };
+    return `${info.rotulo.replace(/^[^\s]+\s/, '')}: ${contagem[l.acao]}`;
+  }).join(' · ');
+
+  const semMapa = linhas.filter(l => l.motivo === 'Turma requer mapeamento.').length;
+  $('#dedAvisoSemMapeamento').style.display = semMapa ? 'block' : 'none';
+  if (semMapa) $('#dedAvisoSemMapeamento').textContent = 'Existem turmas sem mapeamento — essas linhas não serão importadas. Volte ao mapeamento se necessário.';
+
+  $('#dedPreviewBody').innerHTML = linhas.map(l => {
+    const info = DED_ACOES[l.acao] || { rotulo: l.acao, cor: '#000' };
+    const detalhe = l.acao === 'ATUALIZAR' && l.nomeAnterior && l.nomeAnterior !== l.nome
+      ? ` <small class="muted">(antes: ${escapeHtml(l.nomeAnterior)})</small>` : '';
+    const vinculo = l.acao === 'CORRESPONDENCIA' && l.correspondencias && l.correspondencias.length
+      ? `<br/><select class="ded-vinculo-select" data-linha="${l.linha}" style="font-size:12px; margin-top:4px;">
+           <option value="">Criar novo aluno</option>
+           ${l.correspondencias.map(c => `<option value="${c.id}">Vincular ao aluno #${c.id} — ${escapeHtml(c.nome)}</option>`).join('')}
+         </select>` : '';
     return `<tr>
-      <td style="padding:8px 12px;">${i + 1}</td>
-      <td style="padding:8px 12px;">${escapeHtml(a.nome)}</td>
-      <td style="padding:8px 12px;">${escapeHtml(a.turma || '(sem turma)')}</td>
-      <td style="padding:8px 12px;">${duplicado ? '<span class="status-pill badge-warning">Duplicado</span>' : '<span class="status-pill badge-ok">Novo</span>'}</td>
+      <td style="padding:6px 10px;">${l.linha}</td>
+      <td style="padding:6px 10px;">${l.matricula ? `<code>${escapeHtml(l.matricula)}</code>` : '—'}</td>
+      <td style="padding:6px 10px;">${escapeHtml(l.nome)}${detalhe}</td>
+      <td style="padding:6px 10px;">${escapeHtml(l.turmaDed)}</td>
+      <td style="padding:6px 10px;">${l.turmaSistema ? escapeHtml(l.turmaSistema) : '—'}</td>
+      <td style="padding:6px 10px; color:${info.cor}; font-weight:700;">${info.rotulo}</td>
+      <td style="padding:6px 10px; font-size:12px;">${escapeHtml(l.motivo || '')}${vinculo}</td>
     </tr>`;
   }).join('');
 
-  $('#btnDedConfirmarImportacao').disabled = false;
+  const podeConfirmar = linhas.some(l => ['NOVO', 'ATUALIZAR', 'CORRESPONDENCIA'].includes(l.acao));
+  $('#btnDedConfirmarImportacao').disabled = !podeConfirmar;
 }
 
 async function confirmarImportacaoDed() {
-  const ignorarDuplicados = $('#dedIgnorarDuplicados').checked;
-  const nomesExistentes = new Set(state.alunos.map(a => a.nome.toLowerCase()));
+  const linhas = state.dedMapeamentos || [];
+  const aplicaveis = linhas
+    .filter(l => ['NOVO', 'ATUALIZAR', 'CORRESPONDENCIA'].includes(l.acao))
+    .map(l => {
+      const item = { linha: l.linha, matricula: l.matricula, nome: l.nome, turmaDed: l.turmaDed, acao: l.acao };
+      if (l.acao === 'CORRESPONDENCIA') {
+        const sel = document.querySelector(`.ded-vinculo-select[data-linha="${l.linha}"]`);
+        item.vincularAlunoId = sel && sel.value ? Number(sel.value) : null;
+        if (!item.vincularAlunoId) item.acao = 'NOVO'; // sem vínculo escolhido => criar novo
+      } else if (l.acao === 'ATUALIZAR') {
+        item.alunoExistenteId = l.alunoExistenteId;
+      }
+      return item;
+    });
 
-  let importados = 0, ignorados = 0;
-  for (const a of state.dedPreview) {
-    if (!a.turma) { ignorados++; continue; }
-    if (ignorarDuplicados && nomesExistentes.has(a.nome.toLowerCase())) { ignorados++; continue; }
-    try {
-      await api('/api/alunos', { method: 'POST', body: { nome: a.nome, turma: a.turma } });
-      nomesExistentes.add(a.nome.toLowerCase());
-      importados++;
-    } catch (e) {
-      ignorados++;
-    }
-  }
-
-  fecharModal('#modalImportarDed');
-  $('#dedTextoInput').value = '';
-  $('#dedPreviewContainer').style.display = 'none';
+  if (!aplicaveis.length) { toast('Nada para importar.', 'aviso'); return; }
   $('#btnDedConfirmarImportacao').disabled = true;
-  toast(`Importação concluída: ${importados} aluno(s) importado(s), ${ignorados} ignorado(s).`);
-  await recarregarTudo();
+
+  try {
+    const r = await api('/api/alunos/ded/confirmar', { method: 'POST', body: { linhas: aplicaveis } });
+    // ETAPA 5: resumo
+    $('#dedEtapaMapeamento').style.display = 'none';
+    $('#dedEtapaPrevia').style.display = 'none';
+    $('#dedEtapaResumo').style.display = 'block';
+    $('#dedResumoFinal').innerHTML = `
+      <div>✅ <strong>Criados:</strong> ${r.criados}</div>
+      <div>↻ <strong>Atualizados:</strong> ${r.atualizados}</div>
+      <div>⏸ <strong>Ignorados:</strong> ${r.ignorados}</div>
+      <div>⚠ <strong>Conflitos:</strong> ${r.conflitos}</div>
+      <div>✕ <strong>Inválidos:</strong> ${r.invalidos}</div>
+      <div class="muted" style="margin-top:6px;">Nomes atualizados: ${r.nomesAtualizados} · Turmas atualizadas: ${r.turmasAtualizadas}</div>`;
+    await recarregarTudo();
+  } catch (err) {
+    toast(err.message || 'Não foi possível concluir a importação. Nenhuma alteração foi aplicada.', 'erro');
+    $('#btnDedConfirmarImportacao').disabled = false;
+  }
 }
 
 // ============================================================
@@ -2947,20 +3098,21 @@ function bindEventos() {
   $('#alunoLimparBusca').addEventListener('click', () => { $('#alunoBusca').value = ''; state.buscaAluno = ''; renderAlunos(); });
   $('#alunoExportar').addEventListener('click', exportarAlunos);
   $('#salvarEdicaoAlunoBtn').addEventListener('click', salvarEdicaoAluno);
-  $('#btnAbrirModalDed').addEventListener('click', () => abrirModal('#modalImportarDed'));
-  $('#btnDedProcessar').addEventListener('click', processarDed);
-  $('#btnDedLimpar').addEventListener('click', () => {
-    $('#dedTextoInput').value = '';
-    $('#dedPreviewContainer').style.display = 'none';
+  $('#btnAbrirModalDed').addEventListener('click', () => { limparEstadoDed(); abrirModal('#modalImportarDed'); });
+  $('#btnDedVoltarArquivo').addEventListener('click', () => {
+    $('#dedEtapaMapeamento').style.display = 'none';
+  });
+  $('#btnDedIrPrevia').addEventListener('click', gerarPreviaDed);
+  $('#btnDedVoltarMapeamento').addEventListener('click', () => {
+    $('#dedEtapaPrevia').style.display = 'none';
+    $('#dedEtapaMapeamento').style.display = 'block';
     $('#btnDedConfirmarImportacao').disabled = true;
   });
   $('#btnDedConfirmarImportacao').addEventListener('click', confirmarImportacaoDed);
   $('#dedArquivoInput').addEventListener('change', (e) => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
-    const reader = new FileReader();
-    reader.onload = () => { $('#dedTextoInput').value = reader.result; };
-    reader.readAsText(arquivo, 'utf-8');
+    processarDed(arquivo);
   });
 
   // Ações da tabela de alunos (delegação)

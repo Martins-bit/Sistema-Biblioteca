@@ -66,6 +66,34 @@ try {
     // Coluna já existe
   }
 
+  // ---- Etapa 6B: matrícula do aluno (identificador de negócio) ----
+  // TEXT (não INTEGER) para preservar zeros à esquerda (ex.: '0012345').
+  // Opcional: alunos antigos permanecem com NULL e continuam funcionando.
+  try {
+    db.exec('ALTER TABLE alunos ADD COLUMN matricula TEXT');
+  } catch (e) { /* Coluna já existe */ }
+
+  // Índice único PARCIAL: apenas matrículas preenchidas são únicas.
+  // NULL (aluno antigo sem matrícula) pode repetir quantas vezes existir.
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_alunos_matricula
+    ON alunos(matricula)
+    WHERE matricula IS NOT NULL
+  `);
+
+  // ---- Etapa 6B: mapeamento persistente de turmas do DED -> turmas do sistema ----
+  // turma_sistema = NULL significa "ignorar esta turma do DED".
+  // NUNCA é preenchido automaticamente por similaridade — só por confirmação
+  // explícita da bibliotecária na importação.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ded_turma_map (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      turma_ded TEXT NOT NULL UNIQUE,
+      turma_sistema TEXT,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // ---- Migrations: estado de conservação do livro nos empréstimos ----
   // Estado/observação registrados na SAÍDA (empréstimo)
   try {

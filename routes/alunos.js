@@ -5,6 +5,30 @@ const db = require('../db');
 const { normalizarTurma, turmaValida } = require('../services/turmas');
 const { calcularReputacao, calcularReputacaoTodos } = require('../services/reputacao');
 const { verificarSituacao, registrarFimDeBloqueioSeEncerrado } = require('../services/bloqueio');
+const { normalizarMatricula } = require('../services/ded');
+const dedRoutes = require('./ded');
+
+// ---- Etapa 6B: validação centralizada da matrícula ----
+// Retorna { valor } ou { erro } (mensagem amigável, nunca stack trace).
+function validarMatriculaEntrada(valor, conn, alunoIdAtual = null) {
+  const norm = normalizarMatricula(valor);
+  if (norm.invalida) {
+    return { erro: 'Matrícula inválida: use somente números. Zeros à esquerda são preservados.' };
+  }
+  if (norm.valor) {
+    const existente = conn.prepare(
+      'SELECT id FROM alunos WHERE matricula = ? AND id != ?'
+    ).get(norm.valor, alunoIdAtual ?? -1);
+    if (existente) {
+      return { erro: 'Esta matrícula já está cadastrada para outro aluno.' };
+    }
+  }
+  return { valor: norm.valor }; // null quando vazia
+}
+
+// Sub-rotas da importação DED (preview / confirmar / mapeamento).
+// Montadas aqui para manter /api/alunos/* sob o mesmo requireAuth do server.js.
+router.use('/ded', dedRoutes);
 
 function situacaoDe(conn, aluno, rep) {
   registrarFimDeBloqueioSeEncerrado(conn, aluno.id, rep.nota);
@@ -105,14 +129,24 @@ router.post('/', (req, res) => {
   }
 
   try {
+    const conn = db();
     const turmaNormalizada = normalizarTurma(turma);
-    const result = db().prepare(
-      'INSERT INTO alunos (nome, turma) VALUES (?, ?)'
-    ).run(String(nome).trim(), turmaNormalizada);
 
-    const novoAluno = db().prepare('SELECT * FROM alunos WHERE id = ?').get(result.lastInsertRowid);
+    // Etapa 6B: matrícula opcional, validada e única.
+    const mat = validarMatriculaEntrada(req.body.matricula, conn);
+    if (mat.erro) return res.status(400).json({ error: mat.erro });
+
+    const result = conn.prepare(
+      'INSERT INTO alunos (nome, turma, matricula) VALUES (?, ?, ?)'
+    ).run(String(nome).trim(), turmaNormalizada, mat.valor);
+
+    const novoAluno = conn.prepare('SELECT * FROM alunos WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json(novoAluno);
   } catch (error) {
+    // Índice único violado (condição de corrida entre validação e insert).
+    if (String(error.message || '').includes('idx_alunos_matricula')) {
+      return res.status(400).json({ error: 'Esta matrícula já está cadastrada para outro aluno.' });
+    }
     console.error('Erro ao criar aluno:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
@@ -143,13 +177,21 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ error: 'Aluno não encontrado' });
     }
 
+    // Etapa 6B: matrícula na edição. Vazia => NULL (permite "limpar").
+    // Igual à própria matrícula atual => permitido. De outro aluno => rejeitado.
+    const mat = validarMatriculaEntrada(req.body.matricula, conn, id);
+    if (mat.erro) return res.status(400).json({ error: mat.erro });
+
     conn.prepare(
-      'UPDATE alunos SET nome = ?, turma = ? WHERE id = ?'
-    ).run(String(nome).trim(), normalizarTurma(turma), id);
+      'UPDATE alunos SET nome = ?, turma = ?, matricula = ? WHERE id = ?'
+    ).run(String(nome).trim(), normalizarTurma(turma), mat.valor, id);
 
     const alunoAtualizado = conn.prepare('SELECT * FROM alunos WHERE id = ?').get(id);
     res.json(alunoAtualizado);
   } catch (error) {
+    if (String(error.message || '').includes('idx_alunos_matricula')) {
+      return res.status(400).json({ error: 'Esta matrícula já está cadastrada para outro aluno.' });
+    }
     console.error('Erro ao atualizar aluno:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }

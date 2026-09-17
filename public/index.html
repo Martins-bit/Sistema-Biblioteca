@@ -2070,6 +2070,10 @@
                 <input id="alunoNome" required placeholder="Ex.: Maria Silva" maxlength="80" />
               </div>
               <div>
+                <label for="alunoMatricula">Matrícula <small class="muted" style="font-weight:400;">(opcional, somente números)</small></label>
+                <input id="alunoMatricula" inputmode="numeric" pattern="[0-9]*" placeholder="Ex.: 0012345" maxlength="20" />
+              </div>
+              <div>
                 <label for="alunoTurma">Sala / Turma</label>
                 <select id="alunoTurma" required>
                   <option value="">Selecione...</option>
@@ -2086,7 +2090,7 @@
 
           <div class="table-wrap">
             <div class="actions" style="margin-top:0; margin-bottom:12px;">
-              <input id="alunoBusca" placeholder="Buscar por nome ou turma..." style="flex:1; min-width: 220px;" />
+              <input id="alunoBusca" placeholder="Buscar por nome, matrícula ou turma..." style="flex:1; min-width: 220px;" />
               <button type="button" class="secondary btn-small" id="alunoLimparBusca">Limpar</button>
             </div>
 
@@ -2094,6 +2098,7 @@
               <thead>
                 <tr>
                   <th>Nome</th>
+                  <th>Matrícula</th>
                   <th>Turma</th>
                   <th>Empréstimos</th>
                   <th>Avaliação</th>
@@ -2967,6 +2972,10 @@
             <input id="editarAlunoNome" required maxlength="80" />
           </div>
           <div>
+            <label for="editarAlunoMatricula">Matrícula <small class="muted" style="font-weight:400;">(somente números)</small></label>
+            <input id="editarAlunoMatricula" inputmode="numeric" pattern="[0-9]*" maxlength="20" />
+          </div>
+          <div>
             <label for="editarAlunoTurma">Sala / Turma</label>
             <select id="editarAlunoTurma" required>
               <option value="">Selecione...</option>
@@ -3042,69 +3051,79 @@
     </div>
   </div>
 
-  <!-- Modal: Importar Alunos do DED (Diário Escolar Digital) -->
+  <!-- Modal: Importar Alunos do DED (Diário Escolar Digital) — Etapa 6B -->
   <div class="modal-backdrop" id="modalImportarDed" role="dialog" aria-modal="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-header" style="background: linear-gradient(180deg, #ecfdf5, #fff);">
         <h3>📥 Importar Alunos do DED (Diário Escolar Digital)</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalImportarDed">&times;</button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
         <p style="font-size: 13px; color: var(--muted); margin-top: 0; line-height: 1.5;">
-          Importe turmas inteiras e listas de alunos copiadas diretamente do <strong>DED (Diário Escolar Digital)</strong> ou de arquivos CSV/TXT. O sistema reconhece automaticamente os nomes e as turmas.
+          Fluxo em 5 etapas: <strong>arquivo → mapear turmas → conferir prévia → confirmar → resumo</strong>.
+          Nada é gravado antes da confirmação final.
         </p>
 
-        <div class="row two" style="margin-bottom: 14px;">
-          <div>
-            <label for="dedTurmaPadrao">Turma padrão (caso a lista não informe a turma):</label>
-            <select id="dedTurmaPadrao">
-              <option value="">Selecione...</option>
-            </select>
+        <!-- ETAPA 1: arquivo -->
+        <div id="dedEtapaArquivo">
+          <div class="row two" style="margin-bottom: 14px;">
+            <div>
+              <label for="dedArquivoInput">Selecione o arquivo (.csv / .txt / .tsv, máx. 2 MB):</label>
+              <input id="dedArquivoInput" type="file" accept=".csv,.txt,.tsv" style="padding: 8px 12px; height: 46px;" />
+            </div>
           </div>
-          <div>
-            <label for="dedArquivoInput">Ou carregar arquivo (.csv / .txt):</label>
-            <input id="dedArquivoInput" type="file" accept=".csv,.txt,.tsv" style="padding: 8px 12px; height: 46px;" />
+          <div id="dedMensagemArquivo" style="display:none;" class="status-pill"></div>
+        </div>
+
+        <!-- ETAPA 2: mapeamento de turmas -->
+        <div id="dedEtapaMapeamento" style="display:none;">
+          <h4 style="margin: 10px 0 6px; font-size: 14px;">2. Mapear turmas do DED</h4>
+          <p style="font-size: 12.5px; color: var(--muted); margin: 0 0 10px;">
+            Escolha a turma do sistema correspondente para cada turma encontrada no arquivo.
+            Escolhas confirmadas são salvas e reutilizadas nas próximas importações.
+          </p>
+          <div id="dedMapeamentoBody"></div>
+          <div class="actions" style="margin-top: 12px;">
+            <button type="button" class="secondary" id="btnDedVoltarArquivo">← Trocar arquivo</button>
+            <button type="button" id="btnDedIrPrevia">Continuar para a prévia →</button>
           </div>
         </div>
 
-        <div>
-          <label for="dedTextoInput">Cole aqui o texto ou tabela copiada do DED:</label>
-          <textarea id="dedTextoInput" rows="6" style="font-family: monospace; font-size: 12px;" placeholder="Exemplos aceitos:&#10;1  1234567  Maria Silva Santos  7ºA&#10;2  7654321  João Pedro Costa    7ºA&#10;&#10;Ou formato CSV / Separado por ponto e vírgula:&#10;Nome;Turma&#10;Ana Paula;8ºB&#10;Carlos Souza;8ºB&#10;&#10;Ou apenas lista de nomes (usará a turma padrão acima):&#10;Lucas Ferreira&#10;Beatriz Ramos"></textarea>
-        </div>
-
-        <div class="actions" style="margin-top: 10px; margin-bottom: 14px;">
-          <button type="button" class="secondary" id="btnDedProcessar">🔍 Analisar e Pré-visualizar Alunos</button>
-          <button type="button" class="secondary" id="btnDedLimpar">Limpar</button>
-        </div>
-
-        <div id="dedPreviewContainer" style="display: none; border-top: 1px solid var(--border); padding-top: 14px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-            <h4 style="margin: 0; font-size: 14px; font-weight: 900; color: var(--text);">
-              Alunos identificados (<span id="dedTotalEncontrados">0</span>)
-            </h4>
-            <label style="font-size: 12px; display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer;">
-              <input type="checkbox" id="dedIgnorarDuplicados" checked style="width: auto; height: auto;" /> Ignorar alunos com mesmo nome já cadastrados
-            </label>
-          </div>
-
-          <div style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px;">
-            <table style="border: 0; margin: 0;">
+        <!-- ETAPA 3: prévia -->
+        <div id="dedEtapaPrevia" style="display:none;">
+          <h4 style="margin: 10px 0 6px; font-size: 14px;">3. Pré-visualização (<span id="dedTotalPreview">0</span> linhas)</h4>
+          <div id="dedResumoPreview" style="font-size: 12.5px; color: var(--muted); margin-bottom: 8px;"></div>
+          <div id="dedAvisoSemMapeamento" style="display:none; font-size: 12.5px; color: #b45309; margin-bottom: 8px; font-weight: 700;"></div>
+          <div style="max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px;">
+            <table style="border: 0; margin: 0; font-size: 12.5px;">
               <thead>
                 <tr>
-                  <th style="padding: 8px 12px; width: 40px;">#</th>
-                  <th style="padding: 8px 12px;">Nome do Aluno</th>
-                  <th style="padding: 8px 12px;">Turma</th>
-                  <th style="padding: 8px 12px; width: 140px;">Status</th>
+                  <th style="padding: 6px 10px; width: 40px;">Linha</th>
+                  <th style="padding: 6px 10px;">Matrícula</th>
+                  <th style="padding: 6px 10px;">Nome</th>
+                  <th style="padding: 6px 10px;">Turma DED</th>
+                  <th style="padding: 6px 10px;">Turma sistema</th>
+                  <th style="padding: 6px 10px; width: 170px;">Ação</th>
+                  <th style="padding: 6px 10px;">Motivo</th>
                 </tr>
               </thead>
               <tbody id="dedPreviewBody"></tbody>
             </table>
           </div>
+          <div class="actions" style="margin-top: 12px;">
+            <button type="button" class="secondary" id="btnDedVoltarMapeamento">← Voltar ao mapeamento</button>
+          </div>
+        </div>
+
+        <!-- ETAPA 5: resumo -->
+        <div id="dedEtapaResumo" style="display:none;">
+          <h4 style="margin: 10px 0 8px; font-size: 14px;">5. Importação concluída!</h4>
+          <div id="dedResumoFinal" style="font-size: 13px; line-height: 1.8;"></div>
         </div>
       </div>
       <div class="modal-footer" style="justify-content: space-between;">
-        <button type="button" class="secondary" data-close-modal="#modalImportarDed">Cancelar</button>
-        <button type="button" id="btnDedConfirmarImportacao" disabled style="background: var(--primary);">📥 Confirmar Importação</button>
+        <button type="button" class="secondary" data-close-modal="#modalImportarDed">Cancelar (não grava nada)</button>
+        <button type="button" id="btnDedConfirmarImportacao" disabled style="background: var(--primary);">✔ Confirmar importação</button>
       </div>
     </div>
   </div>

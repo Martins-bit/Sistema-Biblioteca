@@ -49,11 +49,17 @@ Calculada automaticamente no backend (`services/reputacao.js`) pelo histórico r
 - **Autopreenchimento Inteligente**: Ao escanear o ISBN de um livro novo, o sistema busca automaticamente em bases públicas (Google Books, Open Library, BrasilAPI) e preenche Título, Autor e Categoria.
 - **Etiquetas com QR Code**: Cada livro cadastrado pode ter sua etiqueta gerada e impressa para identificação física no acervo.
 
-### 3. 📥 Cadastro de Alunos com Dados do DED (Diário Escolar Digital)
-- **Importação Direta por Copiar e Colar**: Permite colar tabelas ou listas copiadas diretamente do portal DED (Diário Escolar Digital).
-- **Suporte a Arquivos CSV / TXT**: Permite carregar arquivos de turmas exportados do DED.
-- **Reconhecimento Automático de Colunas**: Identifica automaticamente o nome do aluno e a respectiva turma, filtrando cabeçalhos e números de matrícula/diário.
-- **Pré-visualização e Controle de Duplicados**: Exibe uma tabela prévia dos alunos encontrados antes de salvar, com opção de ignorar automaticamente alunos já cadastrados no sistema.
+### 3. 📥 Matrícula + Importação de Alunos via DED (Etapa 6B)
+- **Matrícula do aluno**: campo opcional (somente números, preserva zeros à esquerda como `0012345`), única entre alunos, gravada como **texto** no banco (nunca número). Alunos antigos permanecem com matrícula vazia (NULL) e continuam funcionando normalmente.
+- **Matrícula no cadastro, edição, listagem, busca e exportação CSV** de alunos.
+- **Importação de arquivo DED (CSV / TXT / TSV)** no modal "📥 Importar Alunos do DED", em fluxo seguro de 5 etapas:
+  1. **Seleção do arquivo** (limite de 2 MB; XLSX/binário é rejeitado; UTF-8, BOM e Latin-1 suportados sem corromper acentos);
+  2. **Mapeamento de turmas** — as turmas do DED (ex.: `3º INFORMÁTICA EM INT 1`) são mapeadas manualmente para as turmas do sistema (ex.: `3°A`) ou marcadas como "Ignorar". **O sistema nunca presume** equivalências; os mapeamentos confirmados são salvos (`ded_turma_map`) e reaproveitados nas próximas importações;
+  3. **Pré-visualização** — cada linha mostra matrícula, nome, turma DED, turma do sistema, ação e motivo: `NOVO`, `ATUALIZAR`, `IGNORAR`, `CONFLITO` (matrícula repetida no arquivo), `POSSÍVEL CORRESPONDÊNCIA` (homônimo sem matrícula — nunca fundido automaticamente; a bibliotecária escolhe vincular ou criar novo) ou `INVÁLIDO`;
+  4. **Confirmação** — o servidor **revalida tudo** (auth, CSRF, matrícula, turma, mapeamento, duplicidades) e aplica as alterações numa **transação**: ou tudo é gravado, ou nada;
+  5. **Resumo** — criados, atualizados, ignorados, conflitos e inválidos.
+- **Preservação do `aluno.id`**: se a matrícula já existe no banco, o aluno é **atualizado** (nunca recriado nem excluído). Empréstimos, histórico, bloqueios, reputação e ranking permanecem vinculados ao mesmo ID.
+- **Nada é gravado** ao apenas selecionar o arquivo — só após o clique explícito em "Confirmar importação".
 
 ### 4. 🔍 Barra de Pesquisa e Ordenação Personalizada de Livros
 - **Busca em Tempo Real**: Campo de pesquisa integrado para filtrar livros instantaneamente por título, autor ou categoria.
