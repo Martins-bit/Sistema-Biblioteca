@@ -245,7 +245,7 @@
   <div class="wrap">
      <!-- Painel decorativo (oculto em telas pequenas) -->
      <aside class="aside" aria-hidden="true">
-       <div class="aside-logo">📚</div>
+       <div class="aside-logo"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
        <div class="big">Sistema da<br/>Biblioteca Escolar</div>
        <div class="lead">Gestão de acervo, alunos, empréstimos e devoluções — simples e segura para o dia a dia da biblioteca.</div>
        <div class="shelf">
@@ -258,7 +258,7 @@
      <div class="pane">
        <div class="card" role="form" aria-label="Tela de login">
          <div class="brand">
-           <div class="logo">📚</div>
+           <div class="logo"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
            <div class="title">Sistema Biblioteca</div>
            <div class="subtitle">Entre com seu e-mail e senha</div>
          </div>
@@ -267,16 +267,16 @@
            <div>
              <label for="email">E-mail</label>
              <div class="input-wrap">
-               <span class="field-ico">✉️</span>
+               <span class="field-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg></span>
                <input id="email" type="email" autocomplete="username" inputmode="email" placeholder="seu.nome@escola.exemplo" required />
              </div>
            </div>
            <div>
              <label for="password">Senha</label>
              <div class="input-wrap">
-               <span class="field-ico">🔒</span>
+               <span class="field-ico"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                <input id="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required />
-               <button type="button" class="toggle-senha" id="toggleSenha" title="Mostrar / ocultar senha" aria-label="Mostrar ou ocultar senha">👁️</button>
+               <button type="button" class="toggle-senha" id="toggleSenha" title="Mostrar / ocultar senha" aria-label="Mostrar ou ocultar senha"><svg id="iconOlho" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
              </div>
            </div>
 
@@ -329,7 +329,7 @@
       const inp = $('#password');
       const visivel = inp.type === 'text';
       inp.type = visivel ? 'password' : 'text';
-      $('#toggleSenha').textContent = visivel ? '👁️' : '🙈';
+      $('#iconOlho').style.opacity = visivel ? '0.4' : '1';
     });
 
     let csrfToken = null;

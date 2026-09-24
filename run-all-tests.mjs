@@ -89,6 +89,13 @@ const server = app.listen(PORT, async () => {
     page.on('pageerror', err => {
       console.error('[Browser PageError]:', err.message);
     });
+    page.on('response', resp => {
+      if (resp.status() >= 400) {
+        resp.text().then(t => {
+          console.error(`[HTTP ${resp.status()}] ${resp.request().method()} ${resp.url()} -> ${t}`);
+        }).catch(() => {});
+      }
+    });
 
     // 1. Acessar página de login
     await page.goto(`http://localhost:${PORT}/login.html`, { waitUntil: 'networkidle' });
@@ -152,11 +159,17 @@ const server = app.listen(PORT, async () => {
     await page.click('#btnFecharScanner');
     await page.waitForTimeout(200);
 
-    // 7. Testar Empréstimo com Prazo
+    // 7. Testar Empréstimo com Prazo (usa o aluno e o livro recém-cadastrados nesta execução)
     await page.click('.nav-item[data-nav="emprestimos"]');
     await page.waitForTimeout(300);
-    const optLivro = await page.$eval('#emprestimoLivro', el => el.options[1]?.value);
-    const optAluno = await page.$eval('#emprestimoAluno', el => el.options[1]?.value);
+    const optLivro = await page.$eval('#emprestimoLivro', (el, t) => {
+      const o = Array.from(el.options).find(o => o.textContent.includes(t));
+      return o ? o.value : null;
+    }, livroTitulo);
+    const optAluno = await page.$eval('#emprestimoAluno', (el, t) => {
+      const o = Array.from(el.options).find(o => o.textContent.includes(t));
+      return o ? o.value : null;
+    }, alunoNome);
     if (optLivro && optAluno) {
       // Os selects de aluno/livro são comboboxes customizados (select nativo escondido).
       // Setamos o valor e disparamos 'change' diretamente, como o componente faz.
@@ -199,15 +212,14 @@ const server = app.listen(PORT, async () => {
     await page.click('button[data-close-modal="#modalNotificacoes"]');
     await page.waitForTimeout(200);
 
-    // 10. Testar Modal de Confirmação do Botão "Apagar Tudo"
-    await page.click('.nav-item[data-nav="relatorios"]');
+    // 10. Testar Página de Backup (separada de Relatórios — Etapa 9)
+    // NOTA: o antigo botão destrutivo "Apagar Tudo" (#resetBtn) foi removido por segurança.
+    await page.click('.nav-item[data-nav="backup"]');
     await page.waitForTimeout(300);
-    await page.click('#resetBtn');
-    await page.waitForTimeout(300);
-    const isResetModalAtivo = await page.$eval('#modalConfirmarReset', el => el.classList.contains('active') || el.classList.contains('show'));
-    testAssert(isResetModalAtivo, 'Modal de Confirmação de Apagar Tudo (com opção de backup) exibido');
-    await page.click('button[data-close-modal="#modalConfirmarReset"]');
-    await page.waitForTimeout(200);
+    const isBackupSectionAtiva = await page.$eval('#secBackup', el => el.classList.contains('active') || el.classList.contains('show') || getComputedStyle(el).display !== 'none');
+    testAssert(isBackupSectionAtiva, 'Página de Backup aberta como seção independente (sem botões destrutivos)');
+    const temBtnBackup = await page.$('#criarBackupBtn');
+    testAssert(!!temBtnBackup, 'Botão "Fazer backup agora" presente na página de Backup');
 
     // 11. Testar Personalização de Cores, Fundo e Identidade Visual
     await page.click('#btnPersonalizarTema');
@@ -248,8 +260,8 @@ const server = app.listen(PORT, async () => {
     await page.waitForTimeout(300);
     const restoredPrimary = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim());
     testAssert(restoredPrimary === '#22C55E', 'Tema restaurado para o Verde Esmeralda original após confirmação do usuário');
-    await page.click('#btnSalvarTema');
-    await page.waitForTimeout(200);
+    // NOTA: o app.js fecha o modal de personalização automaticamente ao confirmar a restauração,
+    // portanto NÃO clicamos em #btnSalvarTema novamente (o clique redundante causava timeout).
 
     console.log('\n=============================================');
     console.log(`📊 RESULTADO DOS TESTES: ${successes.length} PASSARAM | ${errors.length} FALHARAM`);
