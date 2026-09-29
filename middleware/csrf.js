@@ -41,6 +41,8 @@ function csrfProtection(req, res, next) {
   // Só protege a API.
   if (!req.path.startsWith('/api')) return next();
   if (!METODOS_MUTANTES.has(req.method)) return next();
+  // Rotas isentas de autenticação (login precisa funcionar sem sessão;
+  // a rota do token cria a sessão que será usada nas demais chamadas).
   if (ISENTAS.has(req.path)) return next();
 
   const tokenSessao = garantirToken(req);

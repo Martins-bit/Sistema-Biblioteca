@@ -60,7 +60,7 @@ export function criarCombobox(selectEl, opts = {}) {
   const search = document.createElement('input');
   search.type = 'text';
   search.className = 'cb-search';
-  search.placeholder = '🔍 Buscar...';
+  search.placeholder = 'Buscar...';
   panel.appendChild(search);
 
   const list = document.createElement('div');

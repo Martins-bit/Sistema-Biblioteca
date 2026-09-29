@@ -4,26 +4,59 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sistema da Biblioteca</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2322C55E'/%3E%3Cpath d='M8 7h5a3 3 0 0 1 3 3v15a2.5 2.5 0 0 0-2.5-2.5H8z' fill='%23fff'/%3E%3Cpath d='M24 7h-5a3 3 0 0 0-3 3v15a2.5 2.5 0 0 1 2.5-2.5H24z' fill='%23fff' opacity='.75'/%3E%3C/svg%3E" />
   <style>
     :root {
+      /* ===== Design System — Sistema da Biblioteca ===== */
+      /* Cores semânticas (a cor personalizada do usuário sobrepõe --primary/--bg/--card em runtime) */
       --primary: #22C55E;
       --primary-dark: #15803D;
+      --primary-soft: rgba(34, 197, 94, 0.10);
+      --primary-soft-2: rgba(34, 197, 94, 0.18);
       --bg: #F8FAFC;
       --card: #FFFFFF;
+      --surface-2: #F1F5F9;
       --border: #E5E7EB;
+      --border-strong: #CBD5E1;
       --text: #1F2937;
+      --text-soft: #374151;
       --muted: #6B7280;
 
+      --success: #22C55E;
+      --success-dark: #15803D;
+      --warning: #F59E0B;
+      --warning-dark: #B45309;
       --danger: #ef4444;
       --danger-dark: #dc2626;
+      --info: #3B82F6;
+      --info-dark: #1D4ED8;
 
+      /* Escala de sombras (sutis, sem exagero) */
       --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+      --shadow-md: 0 4px 12px rgba(16, 24, 40, 0.08);
       --shadow: 0 10px 30px rgba(16, 24, 40, 0.10);
+
+      /* Escala de raios */
+      --radius-sm: 8px;
+      --radius-md: 12px;
       --radius: 16px;
+
+      /* Escala de espaçamento (4px) */
+      --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+      --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+
+      /* Tipografia */
+      --fs-xs: 11px;
+      --fs-sm: 12.5px;
+      --fs-md: 14px;
+      --fs-lg: 16px;
+      --fs-xl: 19px;
 
       --custom-bg-img: none;
       --custom-overlay: rgba(248, 250, 252, 0);
       --custom-blur: 0px;
+
+      --focus-ring: 0 0 0 3px rgba(34, 197, 94, 0.35);
     }
 
     * { box-sizing: border-box; }
@@ -32,11 +65,46 @@
 
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: var(--bg);
       color: var(--text);
+      font-size: var(--fs-md);
+      line-height: 1.5;
       overflow-x: hidden;
     }
+
+    /* Hierarquia tipográfica global */
+    h1, h2, h3 { letter-spacing: -0.01em; }
+    small { font-weight: 600; }
+
+    /* Foco visível (acessibilidade) */
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
+
+    /* Estados de botão: disabled + loading */
+    button:disabled, button[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    button.loading {
+      pointer-events: none;
+      opacity: 0.75;
+    }
+    button.loading::before {
+      content: '';
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.45);
+      border-top-color: #fff;
+      animation: spin 700ms linear infinite;
+      display: inline-block;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Scrollbar (Webkit) */
     *::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -106,27 +174,52 @@
     .nav-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 10px 10px;
-      border-radius: 12px;
-      color: var(--text);
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: var(--radius-md);
+      color: var(--text-soft);
       text-decoration: none;
-      font-weight: 700;
+      font-weight: 600;
+      font-size: 14px;
       border: 1px solid transparent;
-      transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
       user-select: none;
     }
 
-    .nav-item:hover {
-      background: rgba(34, 197, 94, 0.08);
-      border-color: rgba(34, 197, 94, 0.25);
-      transform: translateY(-1px);
+    .nav-item .nav-ico {
+      width: 20px; height: 20px;
+      flex-shrink: 0;
+      opacity: 0.72;
+      transition: opacity 160ms ease;
     }
+    .nav-item .nav-ico svg { width: 100%; height: 100%; display: block; }
+
+    .nav-item:hover {
+      background: var(--primary-soft);
+      border-color: transparent;
+      color: var(--text);
+      transform: none;
+    }
+    .nav-item:hover .nav-ico { opacity: 1; }
 
     .nav-item.active {
-      background: rgba(34, 197, 94, 0.12);
-      border-color: rgba(34, 197, 94, 0.35);
+      background: var(--primary-soft);
+      color: var(--primary-dark);
+      font-weight: 700;
+      position: relative;
     }
+    .nav-item.active .nav-ico { opacity: 1; color: var(--primary-dark); }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 20%; bottom: 20%;
+      width: 3px;
+      border-radius: 3px;
+      background: var(--primary);
+    }
+
+    /* Ícone herda a cor do texto do item */
+    .nav-item .nav-ico { color: inherit; }
 
     .sidebar .bottom {
       margin-top: auto;
@@ -248,13 +341,17 @@
       letter-spacing: -0.01em;
     }
 
-    /* Stats */
+    /* Stats — grade responsiva (Etapa 8: corrige empilhamento em coluna única) */
     .stats {
       margin-top: 16px;
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
       gap: 12px;
     }
+
+    /* A regra genérica [data-section].active força display:block;
+       a seção de stats precisa continuar sendo grid quando ativa */
+    section.stats.active { display: grid; }
 
     .stat-card {
       background: var(--card);
@@ -283,27 +380,30 @@
     .stat-icon {
       width: 44px;
       height: 44px;
-      border-radius: 14px;
-      background: rgba(34, 197, 94, 0.12);
-      border: 1px solid rgba(34, 197, 94, 0.25);
+      border-radius: var(--radius-md);
+      background: var(--primary-soft);
+      border: 1px solid transparent;
       display: grid;
       place-items: center;
       font-size: 20px;
+      color: var(--primary-dark);
     }
+    .stat-icon svg { width: 22px; height: 22px; }
 
     .stat-number {
       margin-top: 10px;
-      font-size: 30px;
-      font-weight: 1000;
-      letter-spacing: -0.03em;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
       color: var(--text);
+      line-height: 1.1;
     }
 
     .stat-label {
-      margin-top: 6px;
-      font-size: 13px;
+      margin-top: 4px;
+      font-size: var(--fs-sm);
       color: var(--muted);
-      font-weight: 800;
+      font-weight: 500;
     }
 
     .stat-emoji {
@@ -413,8 +513,15 @@
         grid-template-columns: 1fr 1fr;
       }
       .row.three {
-        grid-template-columns: 1fr 1fr 1fr;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
+      .row.four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+    /* Telas médias: grids largas caem para 2 colunas (evita campos apertados) */
+    @media (min-width: 860px) and (max-width: 1240px) {
+      .row.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
     .form-grid {
@@ -425,37 +532,41 @@
     /* Buttons */
     button {
       border: 0;
-      border-radius: 12px;
+      border-radius: var(--radius-md);
       height: 46px;
-      padding: 0 14px;
+      padding: 0 16px;
       cursor: pointer;
-      font-weight: 950;
+      font-weight: 700;
+      font-size: var(--fs-md);
       color: #fff;
       background: var(--primary);
-      transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+      transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease, filter 140ms ease;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 10px;
+      gap: 8px;
       user-select: none;
     }
 
     button:hover {
       background: var(--primary-dark);
       transform: translateY(-1px);
-      box-shadow: 0 12px 25px rgba(21, 128, 61, 0.18);
+      box-shadow: var(--shadow-md);
     }
 
+    button:active { transform: translateY(0); filter: brightness(0.95); }
+
     button.secondary {
-      background: #F3F4F6;
+      background: var(--card);
       border: 1px solid var(--border);
       color: var(--text);
-      box-shadow: none;
+      box-shadow: var(--shadow-sm);
     }
 
     button.secondary:hover {
-      background: #E5E7EB;
-      box-shadow: none;
+      background: var(--surface-2);
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-sm);
     }
 
     button.danger {
@@ -467,9 +578,9 @@
     .btn-small {
       height: 38px;
       padding: 0 12px;
-      border-radius: 10px;
-      font-size: 12px;
-      font-weight: 950;
+      border-radius: var(--radius-sm);
+      font-size: var(--fs-sm);
+      font-weight: 700;
     }
 
     .btn-outline {
@@ -626,6 +737,121 @@
 
     /* Helpers */
     .muted { color: var(--muted); }
+
+    /* ===== Etapa 8: refinamentos de identidade ===== */
+    .sidebar .brand .title {
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .sidebar .section-title {
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 2px 12px;
+    }
+    .section-title.system-status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 999px;
+      background: var(--success);
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+      flex-shrink: 0;
+    }
+
+    .topbar .hello {
+      font-size: var(--fs-lg);
+      font-weight: 800;
+    }
+    .topbar .subtitle {
+      font-size: var(--fs-sm);
+      font-weight: 500;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .avatar .name {
+      font-weight: 700;
+      font-size: var(--fs-md);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+    .avatar .dot {
+      box-shadow: 0 0 0 4px var(--primary-soft);
+    }
+    button.avatar:hover { border-color: var(--border-strong); transform: none; }
+
+    .icon-btn {
+      color: var(--text-soft);
+    }
+    .icon-btn:hover {
+      transform: none;
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-sm);
+      color: var(--text);
+    }
+
+    /* Ícones SVG dentro de botões primários ficam brancos */
+    button svg { flex-shrink: 0; }
+
+    /* ===== Etapa 8: estados vazios profissionais ===== */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 6px;
+      padding: 32px 16px;
+      color: var(--muted);
+    }
+    .empty-state .es-ico {
+      width: 44px; height: 44px;
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .empty-state .es-ico svg { width: 22px; height: 22px; }
+    .empty-state strong { color: var(--text-soft); font-weight: 700; font-size: var(--fs-md); }
+    .empty-state small { font-size: var(--fs-sm); font-weight: 500; }
+
+    /* Skeleton loading genérico */
+    .skeleton {
+      background: linear-gradient(90deg, var(--surface-2) 25%, rgba(148,163,184,0.25) 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: skeleton 1.2s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+      min-height: 14px;
+      color: transparent !important;
+    }
+    @keyframes skeleton { to { background-position: -200% 0; } }
+
+    /* Atalhos do Dashboard */
+    .quick-actions {
+      margin-top: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .quick-actions .qa-label {
+      font-size: var(--fs-sm);
+      color: var(--muted);
+      font-weight: 600;
+      margin-right: 2px;
+    }
+
+    /* Ações de tabela alinhadas em linha (Etapa 8) */
+    .inline-actions { flex-wrap: nowrap; }
+    .inline-actions .btn-small { padding: 0 10px; }
 
     /* Section switching (nav): apenas a seção ativa fica visível */
     [data-section] { display: none; }
@@ -854,8 +1080,29 @@
 
     .status-pill.badge-warning {
       background: #fef3c7;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .badge-warn {
+      background: #fef3c7;
       color: #92400e;
       border: 1px solid #fcd34d;
+    }
+    [data-theme="dark"] .badge-warn,
+    .theme-dark .badge-warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.4);
     }
 
     .status-pill.badge-soon {
@@ -1450,9 +1697,10 @@
       padding: 14px;
       margin-bottom: 14px;
     }
-    .report-toolbar .field { min-width: 150px; }
+    .report-toolbar .field { min-width: 150px; margin-bottom: 0; }
+    .report-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     .report-area {
-      background: linear-gradient(180deg, #ffffff, #fbfdfc);
+      background: var(--card);
       border: 1px solid var(--border);
       border-radius: 16px;
       padding: 24px;
@@ -1490,6 +1738,9 @@
       padding: 3px 10px;
       border-radius: 999px;
       font-size: 11px;
+    }
+    html[data-tema="escuro"] .report-area .report-meta .chip {
+      color: #4ade80;
     }
     .report-section { margin-top: 22px; }
     .report-section h4 {
@@ -1533,10 +1784,10 @@
     }
     .report-table td {
       padding: 10px 12px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--border);
       font-weight: 700;
       vertical-align: top;
-      background: #fff;
+      background: var(--card);
     }
     .report-table tr:last-child td { border-bottom: 0; }
     .report-table tr:hover td { background: rgba(34, 197, 94, 0.04); }
@@ -1544,6 +1795,10 @@
     .report-table .cons-dev { font-weight: 1000; }
     .report-table .cons-dev.piorou { color: var(--danger); }
     .report-table .cons-dev.ok { color: #15803d; }
+    html[data-tema="escuro"] .report-table .cons-dev.ok { color: #4ade80; }
+    /* Scroll interno para tabelas largas (evita overflow da página no mobile) */
+    .report-table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; }
+    .report-table-wrap .report-table { min-width: 480px; }
     /* Lista de relatórios salvos */
     .saved-reports {
       display: flex;
@@ -1861,6 +2116,287 @@
     .cb-item.disabled:hover { background: transparent; }
     .cb-empty { padding: 14px 12px; text-align: center; font-size: 12px; color: var(--muted); font-weight: 800; }
 
+    /* ============================================================
+       ETAPA 9 — Refinamento profissional (design system acabado)
+       ============================================================ */
+
+    /* Cabeçalho de página: título + contadores em destaque */
+    .page-eyebrow {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--primary-dark);
+      margin: 0 0 2px;
+    }
+    .card-header h2 { font-size: 17px; }
+    .card-header .card-subtitle {
+      color: var(--muted);
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    /* Contadores (chips) do cabeçalho */
+    .header-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .header-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 999px; padding: 5px 12px;
+      font-size: 12px; font-weight: 800; color: var(--text-soft);
+      box-shadow: var(--shadow-sm);
+    }
+    .header-chip strong { color: var(--primary-dark); font-weight: 900; }
+    .header-chip.chip-danger strong { color: var(--danger-dark); }
+    html[data-tema="escuro"] .header-chip { background: var(--surface-2); }
+    html[data-tema="escuro"] .card-header { background: linear-gradient(180deg, rgba(148,163,184,0.06), transparent); }
+
+    /* Cabeçalho do card sem gradiente forte (mais sóbrio, profissional) */
+    .legacy-section .card-header {
+      background: linear-gradient(180deg, var(--primary-soft), transparent);
+      padding: 18px 20px;
+    }
+    html[data-tema="escuro"] .legacy-section .card-header {
+      background: linear-gradient(180deg, rgba(148,163,184,0.08), transparent);
+    }
+    .legacy-section .card-body { padding: 20px; }
+
+    /* Grupos de formulário (Livros: Informações / Classificação / Localização / Identificação / Capa) */
+    .form-group-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px 16px;
+      background: var(--bg);
+      margin-bottom: 14px;
+    }
+    .form-group-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 900;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--primary-dark);
+      margin: 0 0 12px;
+    }
+    .form-group-title::before {
+      content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--primary);
+    }
+    html[data-tema="escuro"] .form-group-card { background: rgba(148,163,184,0.05); }
+    html[data-tema="escuro"] .form-group-title { color: var(--text); }
+
+    /* Fluxo de empréstimo: passos numerados */
+    .fluxo-passo {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px 16px;
+      background: var(--bg);
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .fluxo-passo-titulo {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12px; font-weight: 900; letter-spacing: 0.05em;
+      text-transform: uppercase; color: var(--text-soft);
+      margin: 0 0 12px;
+    }
+    .fluxo-num {
+      width: 24px; height: 24px; border-radius: 999px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: var(--primary); color: #fff;
+      font-size: 12px; font-weight: 900;
+    }
+    html[data-tema="escuro"] .fluxo-passo { background: rgba(148,163,184,0.05); }
+    .emprestimo-situacao {
+      border-radius: var(--radius-md); padding: 12px 14px;
+      font-size: 13px; line-height: 1.6; font-weight: 700;
+    }
+    .emprestimo-situacao.liberado { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); color: var(--text-soft); }
+    .emprestimo-situacao.bloqueado { background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.3); color: var(--text-soft); }
+    /* Placeholder do passo 2 (Situação do aluno) enquanto nenhum aluno foi
+       escolhido — mantém a numeração visual 1→2→3→4 sem pisca o painel real. */
+    .fluxo-pendente .fluxo-num-pendente { background: var(--muted); opacity:.55; }
+    .fluxo-pendente-texto { font-size:12.5px; font-weight:600; color:var(--muted); opacity:.85; }
+
+    /* Estados vazios profissionais com ícone SVG */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; text-align: center;
+      padding: 36px 16px;
+      color: var(--muted);
+    }
+    .empty-state .empty-ico {
+      width: 52px; height: 52px; border-radius: 16px;
+      display: grid; place-items: center;
+      background: var(--primary-soft); color: var(--primary-dark);
+    }
+    .empty-state .empty-ico svg { width: 26px; height: 26px; }
+    .empty-state .empty-title { font-size: 14px; font-weight: 900; color: var(--text-soft); }
+    .empty-state .empty-hint { font-size: 12.5px; font-weight: 600; max-width: 46ch; }
+    html[data-tema="escuro"] .empty-state .empty-ico { background: rgba(148,163,184,0.12); color: var(--muted); }
+
+    /* Skeleton loading (tabelas/painéis) */
+    .skeleton-loading { display: grid; gap: 10px; padding: 6px 2px; }
+    .skeleton-line {
+      height: 14px; border-radius: 7px;
+      background: linear-gradient(90deg, var(--surface-2) 25%, rgba(148,163,184,0.25) 50%, var(--surface-2) 75%);
+      background-size: 200% 100%;
+      animation: skeletonShimmer 1.3s infinite;
+    }
+    @keyframes skeletonShimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+    /* Tabelas: acabamento mais fino */
+    table { background: var(--card); }
+    thead th {
+      background: var(--surface-2);
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    td { font-weight: 600; }
+    tbody tr { transition: background 120ms ease; }
+    tbody tr:hover td { background: var(--primary-soft); }
+    html[data-tema="escuro"] thead th { color: var(--text-soft); }
+    .matricula-code {
+      font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+      font-size: 12.5px; font-weight: 700; letter-spacing: 0.04em;
+      background: var(--surface-2); border: 1px solid var(--border);
+      padding: 2px 8px; border-radius: 6px; white-space: nowrap;
+    }
+
+    /* Filtros de empréstimo: pills segmentadas */
+    .emp-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .emp-filter { border-radius: 999px; font-weight: 800; }
+    .emp-filter.active {
+      background: var(--primary) !important; color: #fff !important;
+      border-color: var(--primary) !important;
+    }
+    .emp-filter.active:hover { background: var(--primary-dark) !important; }
+
+    /* Backup: layout próprio (Etapa 9) */
+    .backup-hero {
+      display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; justify-content: space-between;
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow-sm);
+    }
+    .backup-hero-info { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+    .backup-hero-info .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 800; }
+    .backup-hero-info .val { font-size: 17px; font-weight: 900; color: var(--text); }
+    .backup-hero-info .det { font-size: 12px; color: var(--muted); font-weight: 700; }
+    .backup-stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 10px; margin-bottom: 16px;
+    }
+    .backup-stat {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 12px 14px; display: flex; flex-direction: column; gap: 2px;
+    }
+    .backup-stat .n { font-size: 20px; font-weight: 900; color: var(--text); }
+    .backup-stat .l { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    html[data-tema="escuro"] .backup-stat { background: rgba(148,163,184,0.06); }
+    .backup-bloco {
+      background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md);
+      padding: 16px 18px; margin-bottom: 16px;
+    }
+    .backup-bloco > .backup-bloco-titulo {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase;
+      color: var(--primary-dark); margin: 0 0 12px;
+    }
+    .backup-bloco > .backup-bloco-titulo::before { content: ''; width: 4px; height: 15px; border-radius: 2px; background: var(--primary); }
+    html[data-tema="escuro"] .backup-bloco { background: rgba(148,163,184,0.05); }
+    .backup-lista { list-style: none; margin: 0; padding: 0; }
+    .backup-lista li {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 10px 2px; border-bottom: 1px solid var(--border);
+      font-size: 13px; font-weight: 700;
+    }
+    .backup-lista li:last-child { border-bottom: 0; }
+    .btn-icon {
+      width: 34px; height: 34px; padding: 0; border-radius: 10px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 15px;
+    }
+    .backup-toggle {
+      display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 13px;
+      cursor: pointer; margin: 0 !important;
+    }
+    .backup-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+
+    /* Switch visual para backup automático */
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .slider {
+      position: absolute; inset: 0; border-radius: 999px; cursor: pointer;
+      background: var(--border-strong); transition: background 180ms ease;
+    }
+    .switch .slider::before {
+      content: ''; position: absolute; width: 18px; height: 18px; border-radius: 999px;
+      left: 3px; top: 3px; background: #fff; transition: transform 180ms ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .switch input:checked + .slider { background: var(--primary); }
+    .switch input:checked + .slider::before { transform: translateX(20px); }
+    .switch input:focus-visible + .slider { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+    /* Dashboard: compactação dos stat-cards */
+    .stat-card { padding: 14px 16px; }
+    .stat-icon { width: 40px; height: 40px; }
+    .stat-icon svg { width: 20px; height: 20px; }
+    .stat-number { font-size: 26px; margin-top: 8px; }
+    section.stats { gap: 12px; }
+
+    /* Estante: cards em proporção de livro, sem vazio excessivo */
+    .estante-grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 14px; }
+    .estante-card:hover { transform: translateY(-3px); }
+    .shelf-empty-grid { min-height: 120px; }
+
+    /* Relatórios: hierarquia dos blocos */
+    .report-area h3 { font-size: 20px; }
+    .report-kpi { text-align: center; padding: 14px 10px; }
+    .report-kpi .num { font-size: 24px; color: var(--primary-dark); }
+
+    /* Ranking: destaque visual */
+    .ranking-tab.active { box-shadow: var(--shadow-sm); }
+    .pos-badge.p1 { box-shadow: 0 2px 8px rgba(253, 224, 71, 0.45); }
+
+    /* Perfil: blocos com hierarquia */
+    .perfil-bloco h4 {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .perfil-bloco h4::before { content: ''; width: 4px; height: 14px; border-radius: 2px; background: var(--primary); }
+
+    /* Modais: header sem gradiente chamativo, mais sóbrio */
+    .modal-dialog { max-width: 560px; width: calc(100vw - 32px); }
+    .modal-lg { max-width: 860px; }
+    .modal-header { background: var(--card); }
+    .modal-footer { background: var(--bg); }
+    html[data-tema="escuro"] .modal-header { background: var(--card); }
+    html[data-tema="escuro"] .modal-footer { background: var(--surface-2); }
+
+    /* Foco acessível consistente em botões e cards clicáveis */
+    button:focus-visible, .cb-box:focus-visible, .shelf-view-btn:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    /* Ajustes finos de responsividade (tablet/celular) */
+    @media (max-width: 768px) {
+      .legacy-section .card-body { padding: 14px; }
+      .backup-hero { flex-direction: column; align-items: stretch; }
+      .form-group-card, .fluxo-passo { padding: 12px; }
+      .card-header { flex-direction: column; align-items: flex-start; }
+      .header-chips { justify-content: flex-start; }
+      .stat-number { font-size: 22px; }
+      .modal-dialog { width: calc(100vw - 16px); }
+      .report-area { padding: 16px; }
+      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    }
+    @media (max-width: 430px) {
+      .stats { grid-template-columns: 1fr; }
+      .emp-filters { gap: 4px; }
+      .backup-stats { grid-template-columns: 1fr 1fr; }
+    }
+
     /* Impressão de relatórios */
     @media print {
       body * { visibility: hidden; }
@@ -1882,30 +2418,53 @@
     <!-- Sidebar (fixed) -->
     <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="title">📚 <span>Sistema Biblioteca</span></div>
+        <div class="title"><span>Sistema Biblioteca</span></div>
         <div class="hr"></div>
       </div>
 
-      <div class="section-title">━━━━━━━━━━━━━━━━</div>
+      <div class="section-title">Menu</div>
       <nav>
-        <a class="nav-item active" href="#" data-nav="dashboard">🏠 Dashboard</a>
-        <a class="nav-item" href="#" data-nav="alunos">👨 Alunos</a>
-        <a class="nav-item" href="#" data-nav="livros">📖 Livros</a>
-        <a class="nav-item" href="#" data-nav="estante">📚 Estante</a>
-        <a class="nav-item" href="#" data-nav="emprestimos">🔄 Empréstimos</a>
-        <a class="nav-item" href="#" data-nav="relatorios">📊 Relatórios</a>
-        <a class="nav-item" href="#" data-nav="ranking">🏆 Ranking</a>
-        <a class="nav-item" href="#" id="navMeuPerfil">👤 Meu Perfil</a>
-        <a class="nav-item" href="#" id="navPersonalizarTema" style="color: var(--primary-dark); font-weight: 900;">🎨 Personalização</a>
+        <a class="nav-item active" href="#" data-nav="dashboard">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+          <span>Dashboard</span></a>
+        <a class="nav-item" href="#" data-nav="alunos">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.2 3.4-5 6.5-5s5.7 1.8 6.5 5"/><path d="M16.5 5.5a3 3 0 0 1 0 5.6"/><path d="M18.5 15.4c1.7.7 2.7 2 3 4.6"/></svg></span>
+          <span>Alunos</span></a>
+        <a class="nav-item" href="#" data-nav="livros">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+          <span>Livros</span></a>
+        <a class="nav-item" href="#" data-nav="estante">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><path d="M7 7v10M11 7v10M15 7v10M19 7v10"/></svg></span>
+          <span>Estante Virtual</span></a>
+        <a class="nav-item" href="#" data-nav="emprestimos">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>
+          <span>Empréstimos</span></a>
+        <a class="nav-item" href="#" data-nav="relatorios">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v-4M12 15V7M17 15v-7"/></svg></span>
+          <span>Relatórios</span></a>
+        <a class="nav-item" href="#" data-nav="backup">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.66 3.58 3 8 3s8-1.34 8-3V5"/><path d="M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg></span>
+          <span>Backup</span></a>
+        <a class="nav-item" href="#" data-nav="ranking">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0z"/><path d="M7 6H4v1a3 3 0 0 0 3 3"/><path d="M17 6h3v1a3 3 0 0 1-3 3"/></svg></span>
+          <span>Ranking</span></a>
+        <a class="nav-item" href="#" id="navMeuPerfil">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c.9-3.8 4-6 7.5-6s6.6 2.2 7.5 6"/></svg></span>
+          <span>Meu Perfil</span></a>
+        <a class="nav-item" href="#" id="navPersonalizarTema">
+          <span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="9" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="7.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="12.5" r="1.4" fill="currentColor" stroke="none"/><path d="M12 21a9 9 0 0 1 0-18c0 3-2.5 4-2.5 6.5S12 12 12 15a3 3 0 0 1-3 3"/></svg></span>
+          <span>Personalização</span></a>
       </nav>
 
       <div class="divider"></div>
 
-      <div class="section-title">🟢 Sistema Online</div>
+      <div class="section-title system-status">
+        <span class="status-dot" aria-hidden="true"></span> Sistema Online
+      </div>
 
       <div style="margin-top: auto; padding-top: 10px;">
         <button type="button" id="logoutBtn" class="secondary btn-small" style="width: 100%; justify-content: center; gap: 6px;">
-          🚪 Sair da Conta
+          Sair da Conta
         </button>
       </div>
     </aside>
@@ -1918,35 +2477,43 @@
           <div class="hello">
             <button class="hamburger" type="button" aria-label="Abrir menu" id="sidebarToggle">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M4 6h16M4 12h16M4 18h16" stroke="#15803D" stroke-width="2" stroke-linecap="round"/>
+                <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
             </button>
-            <span id="helloText">Olá, Bibliotecária 👋</span>
+            <span id="helloText">Olá</span>
           </div>
-          <div class="subtitle" id="subtitleText">Sistema de Biblioteca</div>
+          <div class="subtitle" id="pageTitle">Dashboard</div>
         </div>
 
         <div class="right" id="topbarRight">
           <button class="icon-btn theme-btn" id="btnPersonalizarTema" type="button" title="Personalizar Cores, Foto e Plano de Fundo" aria-label="Personalizar Tema">
-            <span style="font-size: 19px;">🎨</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="9" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="7.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="16" cy="12.5" r="1.4" fill="currentColor" stroke="none"/><path d="M12 21a9 9 0 0 1 0-18c0 3-2.5 4-2.5 6.5S12 12 12 15a3 3 0 0 1-3 3"/></svg>
           </button>
 
           <button class="icon-btn notif-btn" id="notifBellBtn" type="button" title="Central de Notificações de Prazos" aria-label="Notificações">
-            <span style="font-size: 19px;">🔔</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
             <span class="notif-badge" id="notifBadge" style="display:none;">0</span>
           </button>
 
           <button class="avatar" id="perfilBtn" type="button" aria-label="Meu Perfil" title="Meu Perfil">
-            <div class="dot"></div>
-            <div class="name">Bibliotecária</div>
+            <div class="dot" aria-hidden="true"></div>
+            <div class="name">Meu Perfil</div>
           </button>
         </div>
       </div>
 
       <!-- ============ DASHBOARD (apenas painel resumo) ============ -->
+      <div class="quick-actions" data-section="dashboard">
+        <span class="qa-label">Ações rápidas:</span>
+        <button type="button" class="secondary btn-small" data-quick-nav="emprestimos">Novo empréstimo</button>
+        <button type="button" class="secondary btn-small" data-quick-nav="alunos">Cadastrar aluno</button>
+        <button type="button" class="secondary btn-small" data-quick-nav="livros">Cadastrar livro</button>
+        <button type="button" class="secondary btn-small" data-quick-nav="relatorios">Relatórios</button>
+      </div>
+
       <div id="dashboardAlertBanner" class="alert-banner" style="display:none; margin-top: 16px;" data-section="dashboard">
         <div class="alert-banner-content">
-          <div class="alert-banner-icon">⚠️</div>
+          <div class="alert-banner-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></div>
           <div>
             <div class="alert-banner-title" id="alertBannerTitle">Atenção: Existem empréstimos com prazo vencido!</div>
             <div class="alert-banner-desc" id="alertBannerDesc">Alunos precisam devolver livros pendentes.</div>
@@ -1959,7 +2526,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon"><span class="stat-emoji">📚</span></div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
               <div class="stat-number" id="statLivros">0</div>
               <div class="stat-label">Livros cadastrados</div>
             </div>
@@ -1969,7 +2536,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.25)"><span class="stat-emoji">🟢</span></div>
+              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); color: #1D4ED8;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
               <div class="stat-number" id="statDisponiveis">0</div>
               <div class="stat-label">Exemplares disponíveis</div>
             </div>
@@ -1979,7 +2546,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(168, 85, 247, 0.10); border-color: rgba(168, 85, 247, 0.25)"><span class="stat-emoji">📤</span></div>
+              <div class="stat-icon" style="background: rgba(168, 85, 247, 0.10); color: #7E22CE;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.3 7l8.7 5 8.7-5"/><path d="M12 22V12"/></svg></div>
               <div class="stat-number" id="statEmprestados">0</div>
               <div class="stat-label">Livros emprestados</div>
             </div>
@@ -1989,7 +2556,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); border-color: rgba(59, 130, 246, 0.25)"><span class="stat-emoji">👨</span></div>
+              <div class="stat-icon" style="background: rgba(59, 130, 246, 0.10); color: #1D4ED8;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
               <div class="stat-number" id="statAlunos">0</div>
               <div class="stat-label">Alunos cadastrados</div>
             </div>
@@ -1999,7 +2566,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(34, 197, 94, 0.10); border-color: rgba(34, 197, 94, 0.25)"><span class="stat-emoji">🔄</span></div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></div>
               <div class="stat-number" id="statEmprestimosAtivos">0</div>
               <div class="stat-label">Empréstimos ativos</div>
             </div>
@@ -2009,7 +2576,7 @@
         <div class="stat-card" id="statVencidosCard">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(239, 68, 68, 0.10); border-color: rgba(239, 68, 68, 0.25)"><span class="stat-emoji">⚠️</span></div>
+              <div class="stat-icon" style="background: rgba(239, 68, 68, 0.10); color: #B91C1C;" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></div>
               <div class="stat-number" id="statEmprestimosVencidos" style="color: var(--danger);">0</div>
               <div class="stat-label">Empréstimos atrasados</div>
             </div>
@@ -2019,7 +2586,7 @@
         <div class="stat-card">
           <div class="stat-top">
             <div>
-              <div class="stat-icon" style="background: rgba(34, 197, 94, 0.10); border-color: rgba(34, 197, 94, 0.25)"><span class="stat-emoji">📥</span></div>
+              <div class="stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg></div>
               <div class="stat-number" id="statDevolucoesHoje">0</div>
               <div class="stat-label">Devoluções hoje</div>
             </div>
@@ -2030,7 +2597,7 @@
       <section class="card full-width" data-section="dashboard" style="margin-top: 12px;">
         <header class="card-header">
           <div>
-            <h2>📥 Devoluções recentes</h2>
+            <h2>Devoluções recentes</h2>
             <small>Últimas devoluções registradas no sistema</small>
           </div>
           <small class="muted">Dados reais</small>
@@ -2058,10 +2625,13 @@
       <section class="card full-width legacy-section" id="secAlunos" data-section="alunos">
         <header class="card-header">
           <div>
-            <h2>👨 Gerenciamento de Alunos</h2>
-            <small id="alunosCountSmall">0 alunos</small>
+            <div class="page-eyebrow">Gestão de usuários</div>
+            <h2>Gerenciamento de Alunos</h2>
+            <small class="card-subtitle">Cadastro, turmas, DED e reputação</small>
           </div>
-          <small class="muted">Cadastro, turmas e reputação</small>
+          <div class="header-chips">
+            <span class="header-chip"><strong id="alunosCountSmall">0</strong>&nbsp;aluno(s) cadastrados</span>
+          </div>
         </header>
         <div class="card-body">
           <form class="form-grid" id="alunoForm">
@@ -2084,7 +2654,7 @@
 
             <div class="actions">
               <button type="submit">Cadastrar aluno</button>
-              <button type="button" class="secondary" id="btnAbrirModalDed">📥 Importar do DED</button>
+              <button type="button" class="secondary" id="btnAbrirModalDed">Importar do DED</button>
               <button type="button" class="secondary" id="alunoExportar">Exportar dados</button>
             </div>
           </form>
@@ -2118,68 +2688,79 @@
       <section class="card full-width legacy-section" id="secLivros" data-section="livros">
         <header class="card-header">
           <div>
-            <h2>📖 Gerenciamento de Livros</h2>
-            <small id="livrosCountSmall">0 livros</small>
-            <small class="muted" id="livrosDisponiveisSmall">0 disponíveis</small>
+            <div class="page-eyebrow">Acervo</div>
+            <h2>Gerenciamento de Livros</h2>
+            <small class="card-subtitle">Catálogo, localização e exemplares</small>
           </div>
-          <small class="muted">Organize seu acervo</small>
+          <div class="header-chips">
+            <span class="header-chip"><strong id="livrosCountSmall">0</strong>&nbsp;livro(s)</span>
+            <span class="header-chip"><strong id="livrosDisponiveisSmall">0</strong>&nbsp;disponíveis</span>
+          </div>
         </header>
         <div class="card-body">
           <form class="form-grid" id="livroForm">
-            <div class="row two">
-              <div>
-                <label for="livroTitulo">Título</label>
-                <input id="livroTitulo" required placeholder="Ex.: Dom Casmurro" maxlength="120" />
-              </div>
-              <div>
-                <label for="livroAutor">Autor</label>
-                <input id="livroAutor" required placeholder="Ex.: Machado de Assis" maxlength="120" />
-              </div>
-            </div>
-
-            <div>
-              <label for="livroIsbn">ISBN (opcional)</label>
-              <input id="livroIsbn" inputmode="numeric" placeholder="Ex.: 9788535902778" maxlength="17" />
-            </div>
-
-            <div class="row four">
-              <div>
-                <label for="livroCategoria">Categoria</label>
-                <input id="livroCategoria" placeholder="Ex.: Literatura, História, Ciências..." maxlength="80" required />
-              </div>
-              <div>
-                <label for="livroGenero">Gênero</label>
-                <input id="livroGenero" placeholder="Ex.: Romance, História / Não ficção" maxlength="80" />
-              </div>
-              <div>
-                <label for="livroClassificacao">Classificação / Nível de Ensino</label>
-                <select id="livroClassificacao">
-                  <option value="">Selecione...</option>
-                  <option>Ensino Fundamental</option>
-                  <option>Ensino Médio</option>
-                  <option>Fundamental e Médio</option>
-                </select>
-              </div>
-              <div>
-                <label for="livroLocalizacao">Localização física</label>
-                <input id="livroLocalizacao" placeholder="Ex.: A-01" maxlength="12" />
+            <div class="form-group-card">
+              <div class="form-group-title">Informações do livro</div>
+              <div class="row two">
+                <div>
+                  <label for="livroTitulo">Título</label>
+                  <input id="livroTitulo" required placeholder="Ex.: Dom Casmurro" maxlength="120" />
+                </div>
+                <div>
+                  <label for="livroAutor">Autor</label>
+                  <input id="livroAutor" required placeholder="Ex.: Machado de Assis" maxlength="120" />
+                </div>
               </div>
             </div>
 
-            <div class="row two">
-              <div>
-                <label for="livroAcervo">Quantidade (exemplares)</label>
-                <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
+            <div class="form-group-card">
+              <div class="form-group-title">Classificação</div>
+              <div class="row three">
+                <div>
+                  <label for="livroCategoria">Categoria</label>
+                  <input id="livroCategoria" placeholder="Ex.: Literatura, História, Ciências..." maxlength="80" required />
+                </div>
+                <div>
+                  <label for="livroGenero">Gênero</label>
+                  <input id="livroGenero" placeholder="Ex.: Romance, História / Não ficção" maxlength="80" />
+                </div>
+                <div>
+                  <label for="livroClassificacao">Classificação / Nível de Ensino</label>
+                  <select id="livroClassificacao">
+                    <option value="">Selecione...</option>
+                    <option>Ensino Fundamental</option>
+                    <option>Ensino Médio</option>
+                    <option>Fundamental e Médio</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label for="livroCapa">URL da capa (opcional)</label>
-                <input id="livroCapa" type="url" placeholder="https://exemplo.com/capa.jpg" />
+            </div>
+
+            <div class="form-group-card">
+              <div class="form-group-title">Localização e identificação</div>
+              <div class="row four">
+                <div>
+                  <label for="livroLocalizacao">Localização física</label>
+                  <input id="livroLocalizacao" placeholder="Ex.: A-01" maxlength="12" />
+                </div>
+                <div>
+                  <label for="livroIsbn">ISBN (opcional)</label>
+                  <input id="livroIsbn" inputmode="numeric" placeholder="Ex.: 9788535902778" maxlength="17" />
+                </div>
+                <div>
+                  <label for="livroAcervo">Quantidade (exemplares)</label>
+                  <input id="livroAcervo" required type="number" min="1" step="1" value="1" />
+                </div>
+                <div>
+                  <label for="livroCapa">URL da capa (opcional)</label>
+                  <input id="livroCapa" type="url" placeholder="https://exemplo.com/capa.jpg" />
+                </div>
               </div>
             </div>
 
             <div class="actions" style="align-items:center;">
               <button type="submit">Cadastrar livro</button>
-              <button type="button" class="secondary" id="btnAbrirScannerLivro">📷 Ler QR / Código de Barras (ISBN)</button>
+              <button type="button" class="secondary" id="btnAbrirScannerLivro">Ler QR / Código de Barras (ISBN)</button>
               <button type="button" class="secondary" id="livroExportar">Exportar dados</button>
               <img id="livroCapaPreview" src="" alt="" style="display:none; width:44px; height:60px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" />
             </div>
@@ -2187,16 +2768,16 @@
 
           <div class="table-wrap">
             <div class="actions" style="margin-top:0; margin-bottom:12px; align-items:center; gap:10px; flex-wrap:wrap;">
-              <input id="livroBusca" placeholder="🔍 Buscar por título, autor ou categoria..." style="flex:1; min-width: 220px;" />
+              <input id="livroBusca" placeholder="Buscar por título, autor ou categoria..." style="flex:1; min-width: 220px;" />
               <div style="min-width: 210px;">
                 <select id="livroOrdenacao" style="height: 46px;">
-                  <option value="alfabetica-asc">🔤 Ordem Alfabética (A - Z)</option>
-                  <option value="alfabetica-desc">🔤 Ordem Alfabética (Z - A)</option>
-                  <option value="categoria">📚 Separar por Tema / Categoria</option>
-                  <option value="mais-emprestados">📈 Mais Emprestados</option>
-                  <option value="menos-emprestados">📉 Menos Emprestados</option>
-                  <option value="autor">✍️ Autor (A - Z)</option>
-                  <option value="disponiveis">🟢 Mais Disponíveis</option>
+                  <option value="alfabetica-asc">Ordem Alfabética (A - Z)</option>
+                  <option value="alfabetica-desc">Ordem Alfabética (Z - A)</option>
+                  <option value="categoria">Separar por Tema / Categoria</option>
+                  <option value="mais-emprestados">Mais Emprestados</option>
+                  <option value="menos-emprestados">Menos Emprestados</option>
+                  <option value="autor">Autor (A - Z)</option>
+                  <option value="disponiveis">Mais Disponíveis</option>
                 </select>
               </div>
               <button type="button" class="secondary btn-small" id="livroLimparBusca">Limpar</button>
@@ -2225,10 +2806,13 @@
       <section class="card full-width legacy-section" id="secEstante" data-section="estante">
         <header class="card-header">
           <div>
-            <h2>📚 Estante da Biblioteca</h2>
-            <small>Visualize o acervo com as capas dos livros</small>
+            <div class="page-eyebrow">Biblioteca virtual</div>
+            <h2>Estante da Biblioteca</h2>
+            <small class="card-subtitle">Visualize o acervo com as capas dos livros</small>
           </div>
-          <small class="muted" id="estanteTotalLivros">0 livros no acervo</small>
+          <div class="header-chips">
+            <span class="header-chip"><strong id="estanteTotalLivros">0</strong>&nbsp;livro(s)</span>
+          </div>
         </header>
         <div class="card-body">
           <div class="shelf-toolbar">
@@ -2236,24 +2820,24 @@
               <div>
                 <label style="margin-bottom: 4px;">Agrupar por:</label>
                 <select id="shelfGroupBy" style="height: 38px; font-size: 13px;">
-                  <option value="categoria">📂 Gênero / Categoria</option>
-                  <option value="autor">✍️ Autor</option>
-                  <option value="estante">📍 Agrupar por Estante</option>
-                  <option value="disponibilidade">🟢 Disponibilidade</option>
-                  <option value="nenhum">🏢 Estante Única</option>
+                  <option value="categoria">Gênero / Categoria</option>
+                  <option value="autor">Autor</option>
+                  <option value="estante">Agrupar por Estante</option>
+                  <option value="disponibilidade">Disponibilidade</option>
+                  <option value="nenhum">Estante Única</option>
                 </select>
               </div>
 
               <div>
                 <label style="margin-bottom: 4px;">Ordenar por:</label>
                 <select id="shelfSortBy" style="height: 38px; font-size: 13px;">
-                  <option value="titulo-asc">🔤 Título (A - Z)</option>
-                  <option value="titulo-desc">🔤 Título (Z - A)</option>
-                  <option value="autor-asc">✍️ Autor (A - Z)</option>
-                  <option value="localizacao">📍 Localização</option>
-                  <option value="acervo-desc">📦 Quantidade de Exemplares</option>
-                  <option value="recentes">🕒 Mais Recentes</option>
-                  <option value="populares">⭐ Mais Populares</option>
+                  <option value="titulo-asc">Título (A - Z)</option>
+                  <option value="titulo-desc">Título (Z - A)</option>
+                  <option value="autor-asc">Autor (A - Z)</option>
+                  <option value="localizacao">Localização</option>
+                  <option value="acervo-desc">Quantidade de Exemplares</option>
+                  <option value="recentes">Mais Recentes</option>
+                  <option value="populares">Mais Populares</option>
                 </select>
               </div>
 
@@ -2307,8 +2891,12 @@
             <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
               <label style="margin-bottom: 0;">Visualização:</label>
               <div class="shelf-view-toggle">
-                <button type="button" class="shelf-view-btn active" id="btnViewSpines" title="Estante de madeira com livros em pé">🪵 Estante</button>
-                <button type="button" class="shelf-view-btn" id="btnViewGrid" title="Catálogo em cards com capas">🖼️ Catálogo</button>
+                <button type="button" class="shelf-view-btn active" id="btnViewSpines" title="Estante de madeira com livros em pé">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 16V7"/><path d="M11 16V7"/><path d="M15 16V9"/><path d="M19 16v-4"/></svg>
+                  Estante</button>
+                <button type="button" class="shelf-view-btn" id="btnViewGrid" title="Catálogo em cards com capas">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                  Catálogo</button>
               </div>
             </div>
           </div>
@@ -2323,69 +2911,95 @@
       <section class="card full-width" id="secEmprestimos" data-section="emprestimos">
         <header class="card-header">
           <div>
-            <h2>🔄 Empréstimos</h2>
-            <small>Registro com estado de conservação do livro</small>
+            <div class="page-eyebrow">Circulação</div>
+            <h2>Empréstimos</h2>
+            <small class="card-subtitle">Registro com estado de conservação do livro</small>
           </div>
-          <small class="muted">Retirada e devolução</small>
+          <div class="header-chips">
+            <span class="header-chip">Retirada e devolução</span>
+          </div>
         </header>
         <div class="card-body">
           <div class="form-grid" style="margin-bottom: 16px;">
-            <div class="row two">
+            <div class="fluxo-passo">
+              <div class="fluxo-passo-titulo"><span class="fluxo-num" aria-hidden="true">1</span> Aluno</div>
               <div>
-                <label for="emprestimoAluno">Aluno</label>
+                <label for="emprestimoAluno">Selecionar aluno</label>
                 <select id="emprestimoAluno" required>
                   <option value="">Selecione...</option>
                 </select>
               </div>
-              <div>
-                <label for="emprestimoLivro">Livro</label>
-                <select id="emprestimoLivro" required>
-                  <option value="">Selecione...</option>
-                </select>
-              </div>
             </div>
 
-            <div class="row two">
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="fluxo-passo" id="fluxoSituacaoAluno" style="display:none;">
+              <div class="fluxo-passo-titulo"><span class="fluxo-num" aria-hidden="true">2</span> Situação do aluno</div>
+              <div id="emprestimoSituacaoAluno" class="emprestimo-situacao" style="display:none;"></div>
+            </div>
+            <!-- Placeholder do passo 2 (aparece SOMENTE enquanto nenhum aluno foi
+                 escolhido, para a numeração visual não pular de 1 para 3). Quando
+                 um aluno é selecionado, este bloco some e o passo real 2 entra. -->
+            <div class="fluxo-passo" id="fluxoSituacaoPlaceholder">
+              <div class="fluxo-passo-titulo fluxo-pendente"><span class="fluxo-num fluxo-num-pendente" aria-hidden="true">2</span> Situação do aluno</div>
+              <div class="fluxo-pendente-texto">Selecione um aluno acima para ver a situação e a reputação dele.</div>
+            </div>
+
+            <div class="fluxo-passo">
+              <div class="fluxo-passo-titulo"><span class="fluxo-num" aria-hidden="true">3</span> Livro</div>
+              <div class="row two" style="align-items:flex-end;">
                 <div>
-                  <label for="emprestimoData">Data da retirada</label>
-                  <input id="emprestimoData" type="date" required />
-                </div>
-                <div>
-                  <label for="emprestimoPrazo">Prazo de devolução</label>
-                  <select id="emprestimoPrazo">
-                    <option value="7">7 dias (Padrão)</option>
-                    <option value="14">14 dias (2 semanas)</option>
-                    <option value="21">21 dias (3 semanas)</option>
-                    <option value="30">30 dias (1 mês)</option>
+                  <label for="emprestimoLivro">Selecionar livro</label>
+                  <select id="emprestimoLivro" required>
+                    <option value="">Selecione...</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label>Ações rápidas</label>
-                <div style="display: flex; gap: 8px;">
-                  <button type="button" id="emprestarBtn" style="flex:1;" class="btn-small">Registrar empréstimo</button>
-                  <button type="button" id="btnAbrirScannerEmprestimo" class="secondary btn-small" title="Escanear QR Code do Livro">📷 Ler QR</button>
+                <div>
+                  <label for="btnAbrirScannerEmprestimo">&nbsp;</label>
+                  <button type="button" class="secondary" id="btnAbrirScannerEmprestimo" title="Ler QR Code do Livro com leitor USB" style="width:100%;">Ler QR (USB)</button>
                 </div>
               </div>
             </div>
 
-            <div id="emprestimoSituacaoAluno" class="emprestimo-situacao" style="display:none;"></div>
-
-            <div class="row two">
-              <div>
-                <label for="emprestimoEstadoSaida">Estado do livro na saída</label>
-                <select id="emprestimoEstadoSaida">
-                  <option value="Novo">Novo</option>
-                  <option value="Ótimo" selected>Ótimo</option>
-                  <option value="Bom">Bom</option>
-                  <option value="Regular">Regular</option>
-                  <option value="Danificado">Danificado</option>
-                </select>
+            <div class="fluxo-passo">
+              <div class="fluxo-passo-titulo"><span class="fluxo-num" aria-hidden="true">4</span> Retirada e conservação</div>
+              <div class="row two">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <div>
+                    <label for="emprestimoData">Data da retirada</label>
+                    <input id="emprestimoData" type="date" required />
+                  </div>
+                  <div>
+                    <label for="emprestimoPrazo">Prazo de devolução</label>
+                    <select id="emprestimoPrazo">
+                      <option value="7">7 dias (Padrão)</option>
+                      <option value="14">14 dias (2 semanas)</option>
+                      <option value="21">21 dias (3 semanas)</option>
+                      <option value="30">30 dias (1 mês)</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                  <div>
+                    <label for="emprestimoEstadoSaida">Estado do livro na saída</label>
+                    <select id="emprestimoEstadoSaida">
+                      <option value="Novo">Novo</option>
+                      <option value="Ótimo" selected>Ótimo</option>
+                      <option value="Bom">Bom</option>
+                      <option value="Regular">Regular</option>
+                      <option value="Danificado">Danificado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="emprestimoObsSaida">Observações na saída (opcional)</label>
+                    <input id="emprestimoObsSaida" placeholder="Ex.: Pequeno rasgo na capa." maxlength="200" />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label for="emprestimoObsSaida">Observações na saída (opcional)</label>
-                <input id="emprestimoObsSaida" placeholder="Ex.: Pequeno rasgo na capa." maxlength="200" />
+            </div>
+
+            <div class="fluxo-passo">
+              <div class="fluxo-passo-titulo"><span class="fluxo-num" aria-hidden="true">5</span> Confirmação</div>
+              <div class="actions" style="margin:0;">
+                <button type="button" id="emprestarBtn">Registrar empréstimo</button>
               </div>
             </div>
           </div>
@@ -2398,10 +3012,10 @@
 
             <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;" id="emprestimoFiltrosContainer">
               <button type="button" class="secondary btn-small emp-filter active" data-emp-filter="todos">Todos</button>
-              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="vencidos" style="color: #991b1b;">⚠️ Vencidos</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="vencidos" style="color: #991b1b;">Vencidos</button>
               <button type="button" class="secondary btn-small emp-filter" data-emp-filter="vencendo" style="color: #92400e;">⏳ Vencendo em Breve</button>
-              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="no_prazo" style="color: #166534;">🟢 No Prazo</button>
-              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="devolvidos">⚪ Devolvidos</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="no_prazo" style="color: #166534;">No Prazo</button>
+              <button type="button" class="secondary btn-small emp-filter" data-emp-filter="devolvidos">Devolvidos</button>
             </div>
 
             <table>
@@ -2427,38 +3041,42 @@
       <section class="card full-width legacy-section" id="secRelatorios" data-section="relatorios">
         <header class="card-header">
           <div>
-            <h2>📊 Relatórios</h2>
-            <small>Relatórios reais com período, impressão e exportação</small>
+            <div class="page-eyebrow">Análises</div>
+            <h2>Relatórios</h2>
+            <small class="card-subtitle">Relatórios reais com período, impressão e exportação</small>
           </div>
-          <small class="muted">Dados do sistema</small>
+          <div class="header-chips">
+            <span class="header-chip">Dados do sistema</span>
+          </div>
         </header>
         <div class="card-body">
           <div class="report-toolbar">
-            <div class="field">
-              <label for="relatorioPeriodo">Período</label>
-              <select id="relatorioPeriodo" style="height: 46px;">
-                <option value="geral">Geral (todo o histórico)</option>
-                <option value="hoje">Hoje</option>
-                <option value="7d">Últimos 7 dias</option>
-                <option value="30d">Últimos 30 dias</option>
-                <option value="mes">Mês atual</option>
-                <option value="ano">Ano atual</option>
-                <option value="personalizado">Personalizado</option>
-              </select>
+            <div class="report-filters">
+              <div class="field">
+                <label for="relatorioPeriodo">Período</label>
+                <select id="relatorioPeriodo">
+                  <option value="geral">Geral (todo o histórico)</option>
+                  <option value="hoje">Hoje</option>
+                  <option value="7d">Últimos 7 dias</option>
+                  <option value="30d">Últimos 30 dias</option>
+                  <option value="mes">Mês atual</option>
+                  <option value="ano">Ano atual</option>
+                  <option value="personalizado">Personalizado</option>
+                </select>
+              </div>
+              <div class="field" id="relatorioDeField" style="display:none;">
+                <label for="relatorioDe">De</label>
+                <input type="date" id="relatorioDe" />
+              </div>
+              <div class="field" id="relatorioAteField" style="display:none;">
+                <label for="relatorioAte">Até</label>
+                <input type="date" id="relatorioAte" />
+              </div>
             </div>
-            <div class="field" id="relatorioDeField" style="display:none;">
-              <label for="relatorioDe">De</label>
-              <input type="date" id="relatorioDe" />
-            </div>
-            <div class="field" id="relatorioAteField" style="display:none;">
-              <label for="relatorioAte">Até</label>
-              <input type="date" id="relatorioAte" />
-            </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button type="button" id="gerarRelatorioBtn">📋 Gerar relatório</button>
-              <button type="button" class="secondary" id="exportarPdfBtn">🖨️ Imprimir / PDF</button>
-              <button type="button" class="secondary" id="exportarCsvBtn">📄 Exportar CSV</button>
-              <button type="button" class="secondary" id="limparRelatoriosBtn">🗑️ Apagar relatórios salvos</button>
+            <div class="report-actions">
+              <button type="button" id="gerarRelatorioBtn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21l-4.35-4.35"/><circle cx="11" cy="11" r="7"/></svg></span>Gerar relatório</button>
+              <button type="button" class="secondary" id="exportarPdfBtn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>Imprimir / PDF</button>
+              <button type="button" class="secondary" id="exportarCsvBtn"><span class="btn-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>Exportar CSV</button>
             </div>
           </div>
 
@@ -2467,111 +3085,117 @@
           </div>
 
           <div class="report-section" style="margin-top: 20px;">
-            <h4>💾 Relatórios salvos</h4>
+            <h4>Relatórios salvos</h4>
             <div class="actions" style="margin-top:0; margin-bottom:4px;">
-              <button type="button" class="secondary btn-small" id="salvarRelatorioBtn">💾 Salvar relatório atual</button>
-              <button type="button" class="secondary btn-small" id="recarregarSalvosBtn">🔄 Recarregar lista</button>
+              <button type="button" class="secondary btn-small" id="salvarRelatorioBtn">Salvar relatório atual</button>
+              <button type="button" class="secondary btn-small" id="recarregarSalvosBtn">Recarregar lista</button>
+              <button type="button" class="danger btn-small" id="limparRelatoriosBtn">Apagar relatórios salvos</button>
             </div>
             <div id="savedReportsList" class="saved-reports"></div>
-            <div class="empty" id="savedReportsEmpty" style="display:none;">Nenhum relatório salvo ainda. Gere um relatório e clique em "Salvar relatório atual".</div>
+            <div class="empty-state" id="savedReportsEmpty" style="display:none;">
+              <div class="es-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+              <div class="es-title">Nenhum relatório salvo</div>
+              <div class="es-desc">Gere um relatório e clique em <strong>Salvar relatório atual</strong> para guardá-lo aqui.</div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- Backup dos Dados e Limpeza (dentro de Relatórios) -->
-      <section class="card backup full-width" id="secBackup" data-section="relatorios">
+      <!-- Backup e Restauração (aba própria — Etapa 9) -->
+      <section class="card backup full-width legacy-section" id="secBackup" data-section="backup">
         <header class="card-header">
           <div>
-            <h2>💾 Backup dos Dados</h2>
-            <small>Proteção e restauração do banco da biblioteca</small>
+            <div class="page-eyebrow">Segurança dos dados</div>
+            <h2>Backup e Restauração</h2>
+            <small class="card-subtitle">Proteção, histórico e restauração do banco da biblioteca</small>
           </div>
-          <small class="muted">Ações críticas</small>
+          <div class="header-chips">
+            <span class="header-chip">Pasta: backups/</span>
+          </div>
         </header>
         <div class="card-body">
-          <!-- Status do último backup -->
-          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; margin-bottom:14px;">
-            <div>
-              <div style="font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800;">Último backup</div>
-              <div id="backupUltimo" style="font-size:16px; font-weight:900;">Carregando…</div>
-              <div id="backupUltimoDetalhe" class="muted" style="font-size:12px;"></div>
+          <!-- Último backup + contagens -->
+          <div class="backup-hero">
+            <div class="backup-hero-info">
+              <div class="lbl">Último backup</div>
+              <div class="val" id="backupUltimo">Carregando…</div>
+              <div class="det" id="backupUltimoDetalhe"></div>
             </div>
-            <div class="actions" style="margin:0;">
-              <button type="button" id="criarBackupBtn">💾 Fazer backup agora</button>
+            <div class="backup-stats" id="backupUltimoContagens"></div>
+            <div class="actions" style="margin:0; align-items:stretch;">
+              <button type="button" id="criarBackupBtn">Fazer backup agora</button>
             </div>
           </div>
 
           <!-- Backup automático -->
-          <div style="background: var(--surface-2, #f8fafc); border:1px solid var(--border, #e5e7eb); border-radius:12px; padding:14px; margin-bottom:16px;">
+          <div class="backup-bloco">
+            <div class="backup-bloco-titulo">Backup automático</div>
             <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between;">
+              <label class="backup-toggle" for="backupAutomatico">
+                <span class="switch">
+                  <input type="checkbox" id="backupAutomatico" />
+                  <span class="slider" aria-hidden="true"></span>
+                </span>
+                <span id="backupAutoEstado">Backup automático desativado</span>
+              </label>
               <div style="display:flex; align-items:center; gap:10px;">
-                <label for="backupAutomatico" style="margin:0; font-weight:800;">Backup automático</label>
-                <input type="checkbox" id="backupAutomatico" style="width:auto; height:auto;" />
-              </div>
-              <div style="display:flex; align-items:center; gap:10px;">
-                <label for="backupFrequencia" style="margin:0; font-weight:800;">Frequência</label>
-                <select id="backupFrequencia" style="height:40px; min-width:160px;">
+                <label for="backupFrequencia" style="margin:0;">Frequência</label>
+                <select id="backupFrequencia" style="height:40px; min-width:170px; width:auto;">
                   <option value="diario">Diário</option>
                   <option value="semanal">Semanal</option>
                 </select>
               </div>
             </div>
-            <div class="muted" id="backupRetencaoInfo" style="font-size:12px; margin-top:8px;">
+            <div class="muted" id="backupRetencaoInfo" style="font-size:12px; margin-top:10px;">
               Backups automáticos são mantidos até o limite de retenção; os manuais nunca são apagados automaticamente.
             </div>
           </div>
 
           <!-- Histórico -->
-          <div style="margin-bottom:16px;">
-            <div style="font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; margin-bottom:8px;">Histórico de backups</div>
-            <ul id="backupHistorico" class="history" style="list-style:none; margin:0; padding:0;">
+          <div class="backup-bloco">
+            <div class="backup-bloco-titulo">Histórico de backups</div>
+            <ul id="backupHistorico" class="backup-lista">
               <li class="muted">Nenhum backup realizado.</li>
             </ul>
           </div>
 
-          <hr style="border:none; border-top:1px solid var(--border, #e5e7eb); margin:18px 0;" />
-
           <!-- Restauração -->
-          <div style="font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:800; margin-bottom:10px;">Restaurar backup</div>
-          <div class="row two">
-            <div>
-              <label for="arquivoRestore">Selecionar arquivo de backup (.db)</label>
-              <input type="file" id="arquivoRestore" accept=".db,.json" />
-              <div id="restorePreview" class="muted" style="font-size:12px; margin-top:8px;"></div>
-              <div class="actions" style="margin-top:12px;">
-                <button type="button" class="secondary" id="validarRestoreBtn">🔍 Validar arquivo</button>
-                <button type="button" class="danger" id="restaurarBtn" disabled>♻️ Restaurar backup</button>
+          <div class="backup-bloco">
+            <div class="backup-bloco-titulo">Restaurar backup</div>
+            <div class="row two">
+              <div>
+                <label for="arquivoRestore">Selecionar arquivo de backup (.db)</label>
+                <input type="file" id="arquivoRestore" accept=".db,.json" />
+                <div id="restorePreview" class="muted" style="font-size:12px; margin-top:8px;"></div>
+                <div class="actions" style="margin-top:12px;">
+                  <button type="button" class="secondary" id="validarRestoreBtn">Validar arquivo</button>
+                  <button type="button" class="danger" id="restaurarBtn" disabled>Restaurar backup</button>
+                </div>
               </div>
-            </div>
 
-            <div>
-              <label>Backups internos disponíveis</label>
-              <ul id="backupInternos" class="history" style="list-style:none; margin:0; padding:0;">
-                <li class="muted">Nenhum backup interno.</li>
-              </ul>
-              <div class="muted" style="font-size:12px; margin-top:8px;">
-                Um backup de segurança (pre-restore) é criado automaticamente antes de qualquer restauração.
+              <div>
+                <label>Backups internos disponíveis</label>
+                <ul id="backupInternos" class="backup-lista">
+                  <li class="muted">Nenhum backup interno.</li>
+                </ul>
+                <div class="muted" style="font-size:12px; margin-top:8px;">
+                  Um backup de segurança (pre-restore) é criado automaticamente antes de qualquer restauração.
+                </div>
               </div>
             </div>
           </div>
 
-          <hr style="border:none; border-top:1px solid var(--border, #e5e7eb); margin:18px 0;" />
-
           <!-- Importar JSON antigo / download / reset -->
-          <div class="row two">
-            <div>
-              <label for="importarDados">Importar dados de um backup JSON (modo antigo — adiciona, não substitui)</label>
-              <textarea id="importarDados" placeholder="Cole aqui o JSON..."></textarea>
-              <div class="actions" style="margin-top:12px;">
-                <button type="button" id="importarBtn">Importar</button>
-                <button type="button" class="secondary" id="downloadBackupBtn">⬇️ Baixar backup JSON</button>
-              </div>
-            </div>
-
-            <div>
-              <label>Zona de risco</label>
-              <div class="empty" style="margin-top:0; padding-top:0;">Apaga alunos, livros e empréstimos cadastrados. Faça um backup antes.</div>
-              <div class="actions" style="margin-top:12px;">
-                <button type="button" class="danger" id="resetBtn">🗑️ Apagar tudo</button>
+          <div class="backup-bloco">
+            <div class="backup-bloco-titulo">Importação antiga (JSON) e manutenção</div>
+            <div class="row two">
+              <div>
+                <label for="importarDados">Importar dados de um backup JSON (modo antigo — adiciona, não substitui)</label>
+                <textarea id="importarDados" placeholder="Cole aqui o JSON..."></textarea>
+                <div class="actions" style="margin-top:12px;">
+                  <button type="button" id="importarBtn">Importar</button>
+                  <button type="button" class="secondary" id="downloadBackupBtn">Baixar backup JSON</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2582,10 +3206,13 @@
       <section class="card full-width legacy-section" id="secRanking" data-section="ranking">
         <header class="card-header">
           <div>
-            <h2>🏆 Ranking</h2>
-            <small>Alunos e salas com base nos empréstimos reais</small>
+            <div class="page-eyebrow">Desempenho</div>
+            <h2>Ranking</h2>
+            <small class="card-subtitle">Alunos e salas com base nos empréstimos reais</small>
           </div>
-          <small class="muted">Atualizado automaticamente</small>
+          <div class="header-chips">
+            <span class="header-chip">Atualizado automaticamente</span>
+          </div>
         </header>
         <div class="card-body">
           <div class="report-toolbar">
@@ -2607,13 +3234,13 @@
               <input type="date" id="rankingAte" />
             </div>
             <div style="display:flex; gap:8px;">
-              <button type="button" id="rankingAtualizarBtn">🔄 Atualizar</button>
+              <button type="button" id="rankingAtualizarBtn">Atualizar</button>
             </div>
           </div>
 
           <div class="ranking-tabs">
-            <button type="button" class="ranking-tab active" data-ranking-tab="alunos">👨 Alunos</button>
-            <button type="button" class="ranking-tab" data-ranking-tab="salas">🏫 Salas / Turmas</button>
+            <button type="button" class="ranking-tab active" data-ranking-tab="alunos">Alunos</button>
+            <button type="button" class="ranking-tab" data-ranking-tab="salas">Salas / Turmas</button>
           </div>
 
           <!-- Ranking de Alunos -->
@@ -2621,7 +3248,7 @@
             <div class="panel-grid" style="margin-top:0;">
               <section class="card" id="rankingLeitoresCard">
                 <header class="card-header">
-                  <div><h2>📈 Mais leitores</h2><small>Por quantidade de empréstimos</small></div>
+                  <div><h2>Mais leitores</h2><small>Por quantidade de empréstimos</small></div>
                 </header>
                 <div class="card-body">
                   <div class="table-wrap" style="margin-top:0;">
@@ -2646,7 +3273,7 @@
 
               <section class="card" id="rankingReputacaoCard">
                 <header class="card-header">
-                  <div><h2>⭐ Melhor reputação</h2><small>Prazos e conservação dos livros</small></div>
+                  <div><h2>Melhor reputação</h2><small>Prazos e conservação dos livros</small></div>
                 </header>
                 <div class="card-body">
                   <div class="table-wrap" style="margin-top:0;">
@@ -2675,7 +3302,7 @@
           <div id="rankingSalasContainer" style="display:none;">
             <section class="card">
               <header class="card-header">
-                <div><h2>🏫 Salas que mais leram</h2><small>Empréstimos por turma no período</small></div>
+                <div><h2>Salas que mais leram</h2><small>Empréstimos por turma no período</small></div>
               </header>
               <div class="card-body">
                 <div class="table-wrap" style="margin-top:0;">
@@ -2702,46 +3329,15 @@
     </main>
   </div>
 
-  <!-- Modal: Confirmar Reset / Apagar Tudo com Alerta de Backup -->
-  <div class="modal-backdrop" id="modalConfirmarReset" role="dialog" aria-modal="true">
-    <div class="modal-dialog">
-      <div class="modal-header" style="background: linear-gradient(180deg, #fef2f2, #fff);">
-        <h3 style="color: var(--danger);">⚠️ Confirmar Exclusão de Todos os Dados</h3>
-        <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarReset">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div style="text-align: center; margin-bottom: 18px;">
-          <div style="font-size: 44px; margin-bottom: 8px;">🚨</div>
-          <h4 style="margin: 0 0 8px; font-size: 17px; font-weight: 900; color: #1f2937;">Atenção: Ação Crítica e Irreversível!</h4>
-          <p style="margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5;">
-            Você está prestes a apagar permanentemente todos os <strong>alunos</strong>, <strong>livros</strong>, <strong>empréstimos</strong> e <strong>relatórios</strong> cadastrados no sistema.
-          </p>
-        </div>
-
-        <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 14px; margin-bottom: 16px; font-size: 13px; color: #92400e;">
-          <strong>💡 Recomendação de Segurança:</strong><br/>
-          Deseja fazer o download de um <strong>backup completo em arquivo JSON</strong> antes de realizar a exclusão total?
-        </div>
-
-        <div id="resetStatusCounts" style="font-size: 13px; color: var(--muted); font-weight: 800; text-align: center; margin-bottom: 8px;">
-          <!-- Contagem atual de registros -->
-        </div>
-      </div>
-      <div class="modal-footer" style="justify-content: space-between; flex-wrap: wrap;">
-        <button type="button" class="secondary" data-close-modal="#modalConfirmarReset">Cancelar</button>
-        <div style="display: flex; gap: 8px;">
-          <button type="button" id="btnResetSemBackup" class="danger" style="background: #b91c1c;">⚠️ Apagar Sem Backup</button>
-          <button type="button" id="btnResetComBackup" style="background: #15803d;">💾 Fazer Backup e Apagar</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- Modal "Confirmar Reset / Apagar Tudo" foi REMOVIDO na Etapa 9.
+       A exclusão total de dados não é mais uma ação da interface;
+       a recuperação é feita apenas via Backup/Restauração. -->
 
    <!-- Modal: Confirmar Restauração de Backup -->
   <div class="modal-backdrop" id="modalConfirmarRestore" role="dialog" aria-modal="true">
      <div class="modal-dialog">
        <div class="modal-header" style="background: linear-gradient(180deg, #fef2f2, #fff);">
-         <h3 style="color: var(--danger);">♻️ Confirmar Restauração</h3>
+         <h3 style="color: var(--danger);">Confirmar Restauração</h3>
          <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarRestore">&times;</button>
        </div>
        <div class="modal-body">
@@ -2765,20 +3361,20 @@
   <div class="modal-backdrop" id="modalNotificacoes" role="dialog" aria-modal="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-header">
-        <h3>🔔 Central de Notificações de Prazos</h3>
+        <h3>Central de Notificações de Prazos</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalNotificacoes">&times;</button>
       </div>
       <div class="modal-body">
         <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; flex-wrap: wrap;">
           <button type="button" class="secondary btn-small notif-tab active" id="tabNotifTodos" data-filter="todos" style="font-weight: 900;">Todos os Alertas (<span id="notifTotalCount">0</span>)</button>
-          <button type="button" class="secondary btn-small notif-tab" id="tabNotifVencidos" data-filter="vencidos" style="color: #991b1b; background: #fee2e2;">⚠️ Vencidos (<span id="notifVencidosCount">0</span>)</button>
-          <button type="button" class="secondary btn-small notif-tab" id="tabNotifBreve" data-filter="breve" style="color: #92400e; background: #fef3c7;">⏳ Vencendo em Breve (<span id="notifBreveCount">0</span>)</button>
+          <button type="button" class="secondary btn-small notif-tab" id="tabNotifVencidos" data-filter="vencidos" style="color: #991b1b; background: #fee2e2;">Vencidos (<span id="notifVencidosCount">0</span>)</button>
+          <button type="button" class="secondary btn-small notif-tab" id="tabNotifBreve" data-filter="breve" style="color: #92400e; background: #fef3c7;">Vencendo em Breve (<span id="notifBreveCount">0</span>)</button>
         </div>
 
         <div id="notifListContainer" class="notif-list">
           <!-- Itens preenchidos dinamicamente -->
         </div>
-        <div id="notifEmpty" class="empty" style="display:none; text-align: center; padding: 24px 0;">🎉 Nenhum empréstimo vencido ou com prazo próximo! Tudo em dia.</div>
+        <div id="notifEmpty" class="empty" style="display:none; text-align: center; padding: 24px 0;">Nenhum empréstimo vencido ou com prazo próximo! Tudo em dia.</div>
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalNotificacoes">Fechar</button>
@@ -2790,7 +3386,7 @@
   <div class="modal-backdrop" id="modalQrScanner" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3 id="qrModalTitle">🔎 Leitor de Código de Barras / QR Code (USB)</h3>
+        <h3 id="qrModalTitle">Leitor de Código de Barras / QR Code (USB)</h3>
         <button type="button" class="modal-close-btn" id="btnFecharScanner">&times;</button>
       </div>
       <div class="modal-body">
@@ -2823,7 +3419,7 @@
   <div class="modal-backdrop" id="modalQrEtiqueta" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>🏷️ Etiqueta com QR Code do Livro</h3>
+        <h3>Etiqueta com QR Code do Livro</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalQrEtiqueta">&times;</button>
       </div>
       <div class="modal-body">
@@ -2845,7 +3441,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalQrEtiqueta">Fechar</button>
-        <button type="button" id="btnImprimirEtiqueta">🖨️ Imprimir Etiqueta</button>
+        <button type="button" id="btnImprimirEtiqueta">Imprimir Etiqueta</button>
       </div>
     </div>
   </div>
@@ -2854,7 +3450,7 @@
   <div class="modal-backdrop" id="modalDetalhesLivro" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header" id="detalhesHeader">
-        <h3 id="detalhesTituloModal">📖 Detalhes do Livro</h3>
+        <h3 id="detalhesTituloModal">Detalhes do Livro</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalDetalhesLivro">&times;</button>
       </div>
       <div class="modal-body">
@@ -2872,7 +3468,7 @@
   <div class="modal-backdrop" id="modalLocalizarLivro" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>📍 Localizar Livro</h3>
+        <h3>Localizar Livro</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalLocalizarLivro">&times;</button>
       </div>
       <div class="modal-body" id="localizarLivroConteudo">
@@ -2880,7 +3476,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalLocalizarLivro">Fechar</button>
-        <button type="button" class="secondary" id="localizarEditarBtn">✏️ Editar</button>
+        <button type="button" class="secondary" id="localizarEditarBtn">Editar</button>
       </div>
     </div>
   </div>
@@ -2889,7 +3485,7 @@
   <div class="modal-backdrop" id="modalDevolucao" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>📥 Registrar Devolução</h3>
+        <h3>Registrar Devolução</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalDevolucao">&times;</button>
       </div>
       <div class="modal-body">
@@ -2900,7 +3496,7 @@
             <div class="titulo">Estado na saída</div>
             <div class="valor" id="devolucaoEstadoSaida">—</div>
           </div>
-          <div class="estado-seta">➜</div>
+          <div class="estado-seta" aria-hidden="true">→</div>
           <div class="estado-box">
             <div class="titulo">Estado na devolução</div>
             <div class="valor" id="devolucaoEstadoPreview">—</div>
@@ -2908,7 +3504,7 @@
         </div>
 
         <div class="aviso-deterioracao" id="avisoDeterioracao">
-          ⚠️ Atenção: o livro está sendo devolvido em estado <strong>PIOR</strong> do que na saída. Registre as observações abaixo.
+          Atenção: o livro está sendo devolvido em estado <strong>PIOR</strong> do que na saída. Registre as observações abaixo.
         </div>
 
         <div class="form-grid">
@@ -2936,7 +3532,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalDevolucao">Cancelar</button>
-        <button type="button" id="confirmarDevolucaoBtn">✅ Confirmar devolução</button>
+        <button type="button" id="confirmarDevolucaoBtn">Confirmar devolução</button>
       </div>
     </div>
   </div>
@@ -2945,7 +3541,7 @@
   <div class="modal-backdrop" id="modalHistorico" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>🗂️ Histórico do Empréstimo</h3>
+        <h3>Histórico do Empréstimo</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalHistorico">&times;</button>
       </div>
       <div class="modal-body">
@@ -2963,7 +3559,7 @@
   <div class="modal-backdrop" id="modalEditarAluno" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>✏️ Editar Aluno</h3>
+        <h3>Editar Aluno</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalEditarAluno">&times;</button>
       </div>
       <div class="modal-body">
@@ -2986,7 +3582,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalEditarAluno">Cancelar</button>
-        <button type="button" id="salvarEdicaoAlunoBtn">💾 Salvar alterações</button>
+        <button type="button" id="salvarEdicaoAlunoBtn">Salvar alterações</button>
       </div>
     </div>
   </div>
@@ -2995,7 +3591,7 @@
   <div class="modal-backdrop" id="modalEditarLivro" role="dialog" aria-modal="true">
     <div class="modal-dialog">
       <div class="modal-header">
-        <h3>✏️ Editar Livro</h3>
+        <h3>Editar Livro</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalEditarLivro">&times;</button>
       </div>
       <div class="modal-body">
@@ -3047,7 +3643,7 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="secondary" data-close-modal="#modalEditarLivro">Cancelar</button>
-        <button type="button" id="salvarEdicaoLivroBtn">💾 Salvar alterações</button>
+        <button type="button" id="salvarEdicaoLivroBtn">Salvar alterações</button>
       </div>
     </div>
   </div>
@@ -3056,7 +3652,7 @@
   <div class="modal-backdrop" id="modalImportarDed" role="dialog" aria-modal="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-header" style="background: linear-gradient(180deg, #ecfdf5, #fff);">
-        <h3>📥 Importar Alunos do DED (Diário Escolar Digital)</h3>
+        <h3>Importar Alunos do DED (Diário Escolar Digital)</h3>
         <button type="button" class="modal-close-btn" data-close-modal="#modalImportarDed">&times;</button>
       </div>
       <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
@@ -3124,7 +3720,7 @@
       </div>
       <div class="modal-footer" style="justify-content: space-between;">
         <button type="button" class="secondary" data-close-modal="#modalImportarDed">Cancelar (não grava nada)</button>
-        <button type="button" id="btnDedConfirmarImportacao" disabled style="background: var(--primary);">✔ Confirmar importação</button>
+        <button type="button" id="btnDedConfirmarImportacao" disabled style="background: var(--primary);">Confirmar importação</button>
       </div>
     </div>
   </div>
@@ -3133,7 +3729,7 @@
   <div class="modal-backdrop" id="modalPersonalizacao" role="dialog" aria-modal="true">
       <div class="modal-dialog modal-lg">
         <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
-          <h3>🎨 Personalizar Cores, Fotos e Plano de Fundo</h3>
+          <h3>Personalizar Cores, Fotos e Plano de Fundo</h3>
           <button type="button" class="modal-close-btn" data-close-modal="#modalPersonalizacao">&times;</button>
         </div>
         <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
@@ -3144,7 +3740,7 @@
           <!-- 1. Paletas rápidas -->
           <div style="margin-bottom: 22px;">
             <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-              🎨 1. Escolha uma Paleta de Cores Rápida
+              1. Escolha uma Paleta de Cores Rápida
             </label>
             <div class="theme-palettes-grid" id="themePalettesContainer">
               <!-- Renderizado dinamicamente pelo JS -->
@@ -3154,7 +3750,7 @@
           <!-- Cores personalizadas -->
           <div style="margin-bottom: 22px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; padding: 14px;">
             <label style="font-size: 13px; font-weight: 900; margin-bottom: 10px; display: block;">
-              ✨ Ou defina suas próprias cores personalizadas:
+              Ou defina suas próprias cores personalizadas:
             </label>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
               <div>
@@ -3184,7 +3780,7 @@
           <!-- 2. Plano de fundo -->
           <div style="margin-bottom: 22px;">
             <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-              🖼️ 2. Plano de Fundo / Papel de Parede da Biblioteca
+              2. Plano de Fundo / Papel de Parede da Biblioteca
             </label>
 
             <div class="theme-wallpapers-grid" id="themeWallpapersContainer">
@@ -3192,7 +3788,7 @@
             </div>
 
             <div style="border: 2px dashed var(--border); border-radius: 14px; padding: 14px; text-align: center; background: var(--card); margin-top: 10px;">
-              <div style="font-size: 26px; margin-bottom: 4px;">📷</div>
+              <div style="font-size: 26px; margin-bottom: 4px;" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>
               <label for="themeWallpaperFileInput" style="font-size: 13px; font-weight: 800; cursor: pointer; color: var(--primary-dark); display: block; margin-bottom: 4px;">
                 Clique aqui para enviar uma Foto ou Imagem do seu computador / celular
               </label>
@@ -3218,25 +3814,25 @@
                 </div>
               </div>
               <button type="button" class="danger btn-small" id="btnRemoverFundo" style="margin-top: 10px;">
-                🗑️ Remover Imagem de Fundo (Voltar ao Fundo Liso)
+                Remover Imagem de Fundo (Voltar ao Fundo Liso)
               </button>
             </div>
           </div>
 
           <!-- Tema -->
           <div style="margin-bottom: 22px;">
-            <label for="prefTema" style="font-size: 13px; font-weight: 900; margin-bottom: 8px; display: block;">🌗 Tema</label>
+            <label for="prefTema" style="font-size: 13px; font-weight: 900; margin-bottom: 8px; display: block;">Tema</label>
             <select id="prefTema" style="height:44px;">
-              <option value="claro">☀️ Claro</option>
-              <option value="escuro">🌙 Escuro</option>
-              <option value="sistema">🖥️ Sistema</option>
+              <option value="claro">Claro</option>
+              <option value="escuro">Escuro</option>
+              <option value="sistema">Sistema</option>
             </select>
           </div>
 
           <!-- 3. Identidade -->
           <div>
             <label style="font-size: 14px; font-weight: 900; margin-bottom: 8px; display: block;">
-              🏛️ 3. Identidade da sua Biblioteca
+              3. Identidade da sua Biblioteca
             </label>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div>
@@ -3254,17 +3850,17 @@
           <div style="margin-top: 18px;">
             <label for="prefCorPrincipal" style="font-size: 12px;">Cor principal (seletor rápido)</label>
             <select id="prefCorPrincipal" style="height:40px;">
-              <option value="padrao">🟢 Padrão (verde)</option>
-              <option value="azul">🔵 Azul</option>
-              <option value="rosa">🩷 Rosa</option>
-              <option value="verde">🟢 Verde</option>
-              <option value="roxo">🟣 Roxo</option>
+              <option value="padrao">Padrão (verde)</option>
+              <option value="azul">Azul</option>
+              <option value="rosa">Rosa</option>
+              <option value="verde">Verde</option>
+              <option value="roxo">Roxo</option>
             </select>
           </div>
         </div>
         <div class="modal-footer" style="justify-content: space-between;">
-          <button type="button" class="secondary" id="btnRestaurarTemaPadrao">🔄 Restaurar Padrão Original</button>
-          <button type="button" id="btnSalvarTema" style="background: var(--primary);">💾 Salvar e Fechar</button>
+          <button type="button" class="secondary" id="btnRestaurarTemaPadrao">Restaurar Padrão Original</button>
+          <button type="button" id="btnSalvarTema" style="background: var(--primary);">Salvar e Fechar</button>
         </div>
       </div>
   </div>
@@ -3273,12 +3869,12 @@
   <div class="modal-backdrop" id="modalConfirmarResetTema" role="dialog" aria-modal="true">
       <div class="modal-dialog">
         <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
-          <h3>🔄 Restaurar Visual Padrão</h3>
+          <h3>Restaurar Visual Padrão</h3>
           <button type="button" class="modal-close-btn" data-close-modal="#modalConfirmarResetTema">&times;</button>
         </div>
         <div class="modal-body">
           <div style="text-align: center; margin-bottom: 16px;">
-            <div style="font-size: 44px; margin-bottom: 8px;">🎨</div>
+            <div style="font-size: 44px; margin-bottom: 8px;" aria-hidden="true"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg></div>
             <h4 style="margin: 0 0 8px; font-size: 16px; font-weight: 900; color: var(--text);">
               Deseja realmente restaurar as configurações visuais?
             </h4>
@@ -3289,7 +3885,7 @@
         </div>
         <div class="modal-footer" style="justify-content: space-between;">
           <button type="button" class="secondary" data-close-modal="#modalConfirmarResetTema">Cancelar</button>
-          <button type="button" id="btnConfirmarRestauracaoTema" style="background: var(--primary);">✅ Sim, Restaurar Padrão</button>
+          <button type="button" id="btnConfirmarRestauracaoTema" style="background: var(--primary);">Sim, Restaurar Padrão</button>
         </div>
       </div>
   </div>
@@ -3298,7 +3894,7 @@
   <div class="modal-backdrop" id="modalPerfil" role="dialog" aria-modal="true">
      <div class="modal-dialog modal-lg">
        <div class="modal-header" style="background: linear-gradient(180deg, var(--bg), var(--card));">
-         <h3>👤 Meu Perfil</h3>
+         <h3>Meu Perfil</h3>
          <button type="button" class="modal-close-btn" data-close-modal="#modalPerfil">&times;</button>
        </div>
        <div class="modal-body" style="max-height: 75vh; overflow-y: auto; padding: 20px;">
@@ -3313,7 +3909,7 @@
 
          <!-- Alterar nome -->
          <div class="perfil-bloco">
-           <h4>✏️ Alterar nome</h4>
+           <h4>Alterar nome</h4>
            <label for="perfilNomeInput">Nome de exibição</label>
            <input id="perfilNomeInput" type="text" maxlength="80" placeholder="Seu nome" />
            <div class="actions" style="margin-top:12px;">
@@ -3323,13 +3919,13 @@
 
          <!-- Alterar e-mail -->
          <div class="perfil-bloco">
-           <h4>📧 Alterar e-mail</h4>
+           <h4>Alterar e-mail</h4>
            <label for="perfilEmailNovo">Novo e-mail</label>
            <input id="perfilEmailNovo" type="email" placeholder="novo.email@escola.exemplo" />
            <label for="perfilEmailSenha">Senha atual (para confirmar)</label>
            <div class="input-wrap">
              <input id="perfilEmailSenha" type="password" placeholder="Sua senha atual" />
-             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilEmailSenha" aria-label="Mostrar ou ocultar senha">👁️</button>
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilEmailSenha" aria-label="Mostrar ou ocultar senha"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
            </div>
            <div class="actions" style="margin-top:12px;">
              <button type="button" id="salvarEmailBtn">Salvar e-mail</button>
@@ -3338,16 +3934,16 @@
 
          <!-- Alterar senha -->
          <div class="perfil-bloco">
-           <h4>🔒 Alterar senha</h4>
+           <h4>Alterar senha</h4>
            <label for="perfilSenhaAtual">Senha atual</label>
            <div class="input-wrap">
              <input id="perfilSenhaAtual" type="password" placeholder="Senha atual" />
-             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaAtual" aria-label="Mostrar ou ocultar senha">👁️</button>
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaAtual" aria-label="Mostrar ou ocultar senha"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
            </div>
            <label for="perfilSenhaNova">Nova senha</label>
            <div class="input-wrap">
              <input id="perfilSenhaNova" type="password" placeholder="Mínimo 8 caracteres, com letra e número" />
-             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaNova" aria-label="Mostrar ou ocultar senha">👁️</button>
+             <button type="button" class="toggle-senha-perfil" data-toggle="#perfilSenhaNova" aria-label="Mostrar ou ocultar senha"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
            </div>
            <label for="perfilSenhaConfirmar">Confirmar nova senha</label>
            <input id="perfilSenhaConfirmar" type="password" placeholder="Repita a nova senha" />
@@ -3392,6 +3988,18 @@
       const sections = document.querySelectorAll('main [data-section]');
       const sidebar = document.getElementById('sidebar');
 
+      // Título/descrição da página no header
+      const PAGE_META = {
+        dashboard:    { title: 'Dashboard',    desc: 'Visão geral da biblioteca' },
+        alunos:       { title: 'Alunos',       desc: 'Cadastro, turmas e reputação' },
+        livros:       { title: 'Livros',       desc: 'Catálogo e acervo' },
+        estante:      { title: 'Estante Virtual', desc: 'Acervo organizado em estantes' },
+        emprestimos:  { title: 'Empréstimos',  desc: 'Retirada, devolução e conservação' },
+        relatorios:   { title: 'Relatórios',   desc: 'Relatórios, exportação e impressão' },
+        backup:       { title: 'Backup',       desc: 'Backup e restauração dos dados' },
+        ranking:      { title: 'Ranking',      desc: 'Alunos e turmas em destaque' }
+      };
+
       function activate(sectionKey){
         sections.forEach(s => {
           const isTarget = (s.getAttribute('data-section') === sectionKey);
@@ -3402,6 +4010,16 @@
           const navKey = a.getAttribute('data-nav');
           a.classList.toggle('active', navKey === sectionKey);
         });
+
+        const meta = PAGE_META[sectionKey];
+        const pageTitle = document.getElementById('pageTitle');
+        if (pageTitle && meta) pageTitle.textContent = meta.title;
+        const hello = document.getElementById('helloText');
+        const nome = (hello && hello.dataset.nome) ? hello.dataset.nome : '';
+        if (hello) hello.textContent = nome ? `Olá, ${nome}` : 'Olá';
+        const sub = document.querySelector('.topbar .subtitle');
+        if (sub && meta) sub.setAttribute('data-desc', meta.desc);
+        if (sub && meta) sub.textContent = meta.desc;
 
         // Fecha o menu mobile após navegar
         if (sidebar) sidebar.classList.remove('open');
@@ -3422,6 +4040,11 @@
 
       // Expõe para o app.js (links internos como "Ver alunos em atraso")
       window.__activateSection = activate;
+
+      // Atalhos do Dashboard
+      document.querySelectorAll('[data-quick-nav]').forEach(btn => {
+        btn.addEventListener('click', () => activate(btn.getAttribute('data-quick-nav')));
+      });
 
       // Inicializa no Dashboard
       activate('dashboard');

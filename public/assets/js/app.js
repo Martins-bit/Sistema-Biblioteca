@@ -315,9 +315,18 @@ function atualizarSituacaoEmprestimo() {
   if (!selAluno || !box || !btn) return;
 
   const aluno = state.alunos.find(a => String(a.id) === String(selAluno.value));
+  const passo = document.getElementById('fluxoSituacaoAluno');
+  // Placeholder mantém a numeração visual 1→2→3→4 enquanto nenhum aluno
+  // foi escolhido (esconde quando o painel real entra).
+  const placeholder = document.getElementById('fluxoSituacaoPlaceholder');
+  const alternarPasso2 = (mostrarReal) => {
+    if (passo) passo.style.display = mostrarReal ? '' : 'none';
+    if (placeholder) placeholder.style.display = mostrarReal ? 'none' : '';
+  };
   if (!aluno) {
     box.style.display = 'none';
     box.innerHTML = '';
+    alternarPasso2(false);
     btn.disabled = false;
     return;
   }
@@ -339,6 +348,7 @@ function atualizarSituacaoEmprestimo() {
     ${detalhe}
   `;
   box.className = 'emprestimo-situacao ' + (aluno.bloqueado ? 'bloqueado' : 'liberado');
+  alternarPasso2(true);
 
   // Bloqueio também no frontend (a regra real está no backend)
   btn.disabled = !!aluno.bloqueado;
@@ -440,7 +450,7 @@ function renderDashboard() {
       let conservacao = '—';
       if (e.estadoSaida && e.estadoDevolucao) {
         const piorou = estadoPiorou(e.estadoSaida, e.estadoDevolucao);
-        conservacao = `${escapeHtml(e.estadoSaida)} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao)}</strong>${piorou ? ' ⚠️' : ''}`;
+        conservacao = `${escapeHtml(e.estadoSaida)} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao)}</strong>${piorou ? ' <span class="badge badge-warn">Atenção</span>' : ''}`;
       } else if (e.estadoDevolucao) {
         conservacao = escapeHtml(e.estadoDevolucao);
       }
@@ -466,7 +476,7 @@ function renderAlunos() {
     (a.matricula ? String(a.matricula).toLowerCase().includes(busca) : false)
   );
 
-  $('#alunosCountSmall').textContent = `${state.alunos.length} aluno(s)`;
+  $('#alunosCountSmall').textContent = state.alunos.length;
 
   const tbody = $('#alunosBody');
   if (!lista.length) {
@@ -485,8 +495,8 @@ function renderAlunos() {
       <td>${renderEstrelas(a.nota, a.estrelas)} ${situacaoBadgeHTML(a)}</td>
       <td class="table-actions">
         <div class="inline-actions">
-          <button type="button" class="secondary btn-small" data-editar-aluno="${a.id}">✏️ Editar</button>
-          <button type="button" class="danger btn-small" data-excluir-aluno="${a.id}">🗑️ Excluir</button>
+          <button type="button" class="secondary btn-small" data-editar-aluno="${a.id}">Editar</button>
+          <button type="button" class="danger btn-small" data-excluir-aluno="${a.id}">Excluir</button>
         </div>
       </td>
     </tr>
@@ -592,12 +602,12 @@ function limparEstadoDed() {
 }
 
 const DED_ACOES = {
-  NOVO:            { rotulo: '✓ Novo', cor: '#15803d' },
-  ATUALIZAR:       { rotulo: '↻ Atualizar', cor: '#1d4ed8' },
-  CONFLITO:        { rotulo: '⚠ Conflito', cor: '#b45309' },
-  CORRESPONDENCIA: { rotulo: '⏸ Possível correspondência', cor: '#7c3aed' },
-  IGNORAR:         { rotulo: '⏸ Ignorar', cor: '#6b7280' },
-  INVALIDO:        { rotulo: '✕ Inválido', cor: '#dc2626' }
+  NOVO:            { rotulo: 'Novo', cor: '#15803d' },
+  ATUALIZAR:       { rotulo: 'Atualizar', cor: '#1d4ed8' },
+  CONFLITO:        { rotulo: 'Conflito', cor: '#b45309' },
+  CORRESPONDENCIA: { rotulo: 'Possível correspondência', cor: '#7c3aed' },
+  IGNORAR:         { rotulo: 'Ignorar', cor: '#6b7280' },
+  INVALIDO:        { rotulo: 'Inválido', cor: '#dc2626' }
 };
 
 async function processarDed(arquivo) {
@@ -803,11 +813,11 @@ async function confirmarImportacaoDed() {
     $('#dedEtapaPrevia').style.display = 'none';
     $('#dedEtapaResumo').style.display = 'block';
     $('#dedResumoFinal').innerHTML = `
-      <div>✅ <strong>Criados:</strong> ${r.criados}</div>
-      <div>↻ <strong>Atualizados:</strong> ${r.atualizados}</div>
-      <div>⏸ <strong>Ignorados:</strong> ${r.ignorados}</div>
-      <div>⚠ <strong>Conflitos:</strong> ${r.conflitos}</div>
-      <div>✕ <strong>Inválidos:</strong> ${r.invalidos}</div>
+      <div><strong>Criados:</strong> ${r.criados}</div>
+      <div><strong>Atualizados:</strong> ${r.atualizados}</div>
+      <div><strong>Ignorados:</strong> ${r.ignorados}</div>
+      <div><strong>Conflitos:</strong> ${r.conflitos}</div>
+      <div><strong>Inválidos:</strong> ${r.invalidos}</div>
       <div class="muted" style="margin-top:6px;">Nomes atualizados: ${r.nomesAtualizados} · Turmas atualizadas: ${r.turmasAtualizadas}</div>`;
     await recarregarTudo();
   } catch (err) {
@@ -836,8 +846,8 @@ function renderLivros() {
 
   const totalExemplares = state.livros.reduce((s, l) => s + (l.acervo || 0), 0);
   const totalEmprestados = state.emprestimos.filter(e => !e.devolvido).length;
-  $('#livrosCountSmall').textContent = `${state.livros.length} livro(s)`;
-  $('#livrosDisponiveisSmall').textContent = `${Math.max(0, totalExemplares - totalEmprestados)} disponíveis`;
+  $('#livrosCountSmall').textContent = state.livros.length;
+  $('#livrosDisponiveisSmall').textContent = Math.max(0, totalExemplares - totalEmprestados);
 
   const tbody = $('#livrosBody');
   if (!lista.length) {
@@ -858,7 +868,7 @@ function renderLivros() {
     let html = '';
     for (const cat of cats) {
       const livros = grupos.get(cat);
-      html += `<tr class="table-category-header"><td colspan="7">📂 ${escapeHtml(cat)} — ${livros.length} livro(s)</td></tr>`;
+      html += `<tr class="table-category-header"><td colspan="7">${escapeHtml(cat)} — ${livros.length} livro(s)</td></tr>`;
       html += livros.map(l => linhaLivro(l)).join('');
     }
     tbody.innerHTML = html;
@@ -951,9 +961,9 @@ function linhaLivro(l) {
     <td><strong style="color: ${disp > 0 ? '#15803d' : 'var(--danger)'};">${disp}</strong></td>
     <td class="table-actions">
       <div class="inline-actions">
-        <button type="button" class="secondary btn-small" data-etiqueta-livro="${l.id}">🏷️ Etiqueta</button>
-        <button type="button" class="secondary btn-small" data-editar-livro="${l.id}">✏️ Editar</button>
-        <button type="button" class="danger btn-small" data-excluir-livro="${l.id}">🗑️</button>
+        <button type="button" class="secondary btn-small" data-etiqueta-livro="${l.id}">Etiqueta</button>
+        <button type="button" class="secondary btn-small" data-editar-livro="${l.id}">Editar</button>
+        <button type="button" class="danger btn-small" data-excluir-livro="${l.id}" aria-label="Excluir livro">Excluir</button>
       </div>
     </td>
   </tr>`;
@@ -1443,10 +1453,15 @@ function renderEstante() {
   else if (sortBy === 'localizacao') lista.sort(compararLocalizacao);
 
   const container = $('#shelfContainer');
-  $('#estanteTotalLivros').textContent = `${lista.length} livro(s) encontrados de ${state.livros.length} no acervo`;
+  $('#estanteTotalLivros').textContent = lista.length;
 
   if (!lista.length) {
-    container.innerHTML = '<div class="empty">Nenhum livro encontrado com os filtros selecionados.</div>';
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
+        <div class="empty-title">Nenhum livro encontrado</div>
+        <div class="empty-hint">Nenhum livro corresponde aos filtros selecionados. Tente ajustar a busca, a categoria ou o status para ver mais resultados.</div>
+      </div>`;
     return;
   }
 
@@ -1463,11 +1478,11 @@ function renderEstante() {
     }
   }
 
-  const iconeGrupo = groupBy === 'categoria' ? '📂' : groupBy === 'autor' ? '✍️' : groupBy === 'estante' ? '📍' : '🟢';
+  const iconeGrupo = '';
 
   if (state.shelfView === 'spines') {
     if (groupBy === 'nenhum') {
-      container.innerHTML = secaoEstanteMadeira('🏢 Acervo completo', lista, iconeGrupo, false);
+      container.innerHTML = secaoEstanteMadeira('Acervo completo', lista, iconeGrupo, false);
     } else {
       const chaves = [...grupos.keys()].sort((a, b) => {
         if (a === 'Sem localização') return 1;
@@ -1563,7 +1578,7 @@ function cardEstante(livro) {
           <span class="estante-tag estante-tag-muted">${escapeHtml(livro.classificacao || 'Classificação não definida')}</span>
         </div>
         <div class="estante-location">
-          <span class="estante-location-icon">📍</span>
+          <span class="estante-location-icon" aria-hidden="true"></span>
           <span>${escapeHtml(loc)}</span>
         </div>
         <div class="estante-footer">
@@ -1571,8 +1586,8 @@ function cardEstante(livro) {
           <small class="muted" style="font-weight:900;">${disp} disp.</small>
         </div>
         <div class="estante-actions">
-          <button type="button" class="secondary btn-small" data-localizar-livro="${livro.id}">📍 Localizar</button>
-          <button type="button" class="secondary btn-small" data-editar-livro="${livro.id}">✏️ Editar</button>
+          <button type="button" class="secondary btn-small" data-localizar-livro="${livro.id}">Localizar</button>
+          <button type="button" class="secondary btn-small" data-editar-livro="${livro.id}">Editar</button>
         </div>
       </div>
     </div>
@@ -1587,7 +1602,7 @@ function abrirDetalhesLivro(id) {
   const totalEmp = totalEmprestimosLivro(livro.id);
   const localizacao = formatarLocalizacao(livro.localizacaoLetra, livro.localizacaoNumero) || 'Localização não cadastrada';
 
-  $('#detalhesTituloModal').textContent = `📖 ${livro.titulo}`;
+  $('#detalhesTituloModal').textContent = livro.titulo;
   $('#detalhesLivroConteudo').innerHTML = `
     <div style="display:flex; flex-direction:column; gap:14px;">
       <div style="display:flex; gap:16px; align-items:flex-start;">
@@ -1608,16 +1623,16 @@ function abrirDetalhesLivro(id) {
         </div>
       </div>
       <div style="padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(59,130,246,0.25); background: rgba(96,165,250,0.08); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; font-size:13px; font-weight:900;">
-        <span style="color: var(--muted);">📍 Localização física</span>
+        <span style="color: var(--muted);">Localização física</span>
         <strong style="font-size:16px; color: var(--text);">${escapeHtml(localizacao)}</strong>
       </div>
     </div>
   `;
 
   $('#detalhesLivroAcoes').innerHTML = `
-    <button type="button" class="secondary" data-etiqueta-livro="${livro.id}">🏷️ Etiqueta QR</button>
-    <button type="button" class="secondary" data-editar-livro="${livro.id}">✏️ Editar</button>
-    <button type="button" data-ir-emprestar="${livro.id}">🔄 Emprestar</button>
+    <button type="button" class="secondary" data-etiqueta-livro="${livro.id}">Etiqueta QR</button>
+    <button type="button" class="secondary" data-editar-livro="${livro.id}">Editar</button>
+    <button type="button" data-ir-emprestar="${livro.id}">Emprestar</button>
   `;
 
   abrirModal('#modalDetalhesLivro');
@@ -1656,15 +1671,15 @@ function abrirLocalizarLivro(id) {
       </div>
       ${temLoc ? `
       <div style="text-align:center; padding:20px 14px; border-radius:14px; border:2px solid rgba(59,130,246,0.45); background:linear-gradient(180deg, rgba(96,165,250,0.16), rgba(96,165,250,0.08));">
-        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">📍 Localização física</div>
+        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Localização física</div>
         <div style="font-size:17px; font-weight:900; color:#1d4ed8;">Estante ${escapeHtml(String(livro.localizacaoLetra || '').toUpperCase())} — posição ${escapeHtml(String(livro.localizacaoNumero ?? '').padStart(2, '0'))}</div>
         <div style="font-size:34px; font-weight:1000; letter-spacing:0.06em; color:var(--text); margin-top:4px;">${escapeHtml(loc)}</div>
       </div>`
       : `
       <div style="text-align:center; padding:20px 14px; border-radius:14px; border:2px dashed rgba(148,163,184,0.6); background:#f8fafc;">
-        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">📍 Localização física</div>
+        <div style="font-size:13px; font-weight:900; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px;">Localização física</div>
         <div style="font-size:18px; font-weight:1000; color:var(--muted);">Localização não cadastrada</div>
-        <div style="font-size:12px; color:var(--muted); margin-top:6px;">Use “✏️ Editar” para cadastrar a estante e a posição deste livro.</div>
+        <div style="font-size:12px; color:var(--muted); margin-top:6px;">Use “Editar” para cadastrar a estante e a posição deste livro.</div>
       </div>`}
     </div>
   `;
@@ -1716,7 +1731,7 @@ function renderEmprestimos() {
     let conservacao = '—';
     if (e.estadoSaida || e.estadoDevolucao) {
       const piorou = e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao);
-      conservacao = `${escapeHtml(e.estadoSaida || '?')} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao || '?')}</strong>${piorou ? ' ⚠️' : ''}`;
+      conservacao = `${escapeHtml(e.estadoSaida || '?')} → <strong style="${piorou ? 'color: var(--danger);' : 'color: #15803d;'}">${escapeHtml(e.estadoDevolucao || '?')}</strong>${piorou ? ' <span class="badge badge-warn">Atenção</span>' : ''}`;
     }
     return `<tr>
       <td>${escapeHtml(e.alunoNome)}${e.alunoMatricula ? `<br/><small class="muted">Mat. ${escapeHtml(e.alunoMatricula)}</small>` : ''}<br/><small class="muted">${escapeHtml(e.alunoTurma)}</small></td>
@@ -1727,9 +1742,9 @@ function renderEmprestimos() {
       <td>${e.devolvido ? formatarData(e.dataDevolucao) + `<br/><small>${conservacao}</small>` : '—'}</td>
       <td class="table-actions">
         <div class="inline-actions">
-          ${!e.devolvido ? `<button type="button" class="btn-small" data-devolver="${e.id}">📥 Devolver</button>` : ''}
-          <button type="button" class="secondary btn-small" data-historico="${e.id}">🗂️ Histórico</button>
-          ${!e.devolvido ? `<button type="button" class="danger btn-small" data-cancelar-emprestimo="${e.id}">✖</button>` : ''}
+          ${!e.devolvido ? `<button type="button" class="btn-small" data-devolver="${e.id}">Devolver</button>` : ''}
+          <button type="button" class="secondary btn-small" data-historico="${e.id}">Histórico</button>
+          ${!e.devolvido ? `<button type="button" class="danger btn-small" data-cancelar-emprestimo="${e.id}" title="Cancelar" aria-label="Cancelar empréstimo">✕</button>` : ''}
         </div>
       </td>
     </tr>`;
@@ -1868,7 +1883,7 @@ async function abrirHistorico(id) {
       ${linha('Status', e.devolvido ? 'Devolvido' : pillStatus(e))}
       ${e.devolvido ? linha('Data de devolução', formatarData(e.dataDevolucao)) : ''}
       <div style="margin-top:14px;">
-        <div style="font-size:12px; font-weight:1000; color:#065f46; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:8px;">📦 Conservação do livro</div>
+        <div style="font-size:12px; font-weight:1000; color:#065f46; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:8px;">Conservação do livro</div>
         <div class="estado-comparacao" style="margin-bottom:0;">
           <div class="estado-box">
             <div class="titulo">Na saída</div>
@@ -1877,12 +1892,13 @@ async function abrirHistorico(id) {
           <div class="estado-seta">➜</div>
           <div class="estado-box">
             <div class="titulo">Na devolução</div>
-            <div class="valor ${piorou ? 'piorou' : ''}">${escapeHtml(e.estadoDevolucao || '—')}${piorou ? ' ⚠️' : ''}</div>
+            <div class="valor ${piorou ? 'piorou' : ''}">${escapeHtml(e.estadoDevolucao || '—')}${piorou ? ' <span class="badge badge-warn">Atenção</span>' : ''}</div>
+        ${piorou ? '<div class="aviso-deterioracao" style="display:block;">O livro foi devolvido em estado pior do que na saída. Penalização aplicada na reputação do aluno.</div>' : ''}
           </div>
         </div>
         ${e.obsSaida ? linha('Observação na saída', escapeHtml(e.obsSaida)) : ''}
         ${e.obsDevolucao ? linha('Observação na devolução', escapeHtml(e.obsDevolucao)) : ''}
-        ${piorou ? '<div class="aviso-deterioracao show" style="margin-top:10px;">⚠️ O livro foi devolvido em estado pior do que na saída. Penalização aplicada na reputação do aluno.</div>' : ''}
+        ${piorou ? '<div class="aviso-deterioracao show" style="margin-top:10px;">O livro foi devolvido em estado pior do que na saída. Penalização aplicada na reputação do aluno.</div>' : ''}
       </div>
     `;
     abrirModal('#modalHistorico');
@@ -1952,7 +1968,7 @@ function renderNotificacoes(filtro = 'todos') {
       <div class="notif-card ${vencido ? 'overdue' : 'warning'}">
         <div class="notif-card-header">
           <span class="notif-student">${escapeHtml(e.alunoNome)} — ${escapeHtml(e.alunoTurma)}</span>
-          <span class="status-pill ${vencido ? 'badge-overdue' : 'badge-warning'}">${vencido ? '⚠️ Vencido' : '⏳ Vence em breve'}</span>
+          <span class="status-pill ${vencido ? 'badge-overdue' : 'badge-warning'}">${vencido ? 'Vencido' : 'Vence em breve'}</span>
         </div>
         <div class="notif-book">📖 ${escapeHtml(e.livroTitulo)}</div>
         <div class="notif-meta">
@@ -1960,7 +1976,7 @@ function renderNotificacoes(filtro = 'todos') {
           <span>Prazo: ${formatarData(e.dataLimite)}</span>
         </div>
         <div class="notif-actions">
-          <button type="button" class="btn-small" data-devolver="${e.id}">📥 Registrar devolução</button>
+          <button type="button" class="btn-small" data-devolver="${e.id}">Registrar devolução</button>
         </div>
       </div>
     `;
@@ -2093,13 +2109,13 @@ function renderRelatorio() {
     if (!m.devolvido) return `${saida} <span class="muted">→ (em posse)</span>`;
     if (!m.estadoDevolucao) return `${saida} → <span class="muted">não registrado</span>`;
     const classe = m.piorou ? 'piorou' : 'ok';
-    const aviso = m.piorou ? ' ⚠️' : '';
+    const aviso = m.piorou ? ' (!)' : '';
     return `${saida} → <span class="cons-dev ${classe}">${escapeHtml(m.estadoDevolucao)}${aviso}</span>`;
   };
 
   const statusMovimento = (m) => {
     if (!m.devolvido) {
-      if (m.limite && m.limite < hojeISO()) return '<span class="status-pill badge-overdue">⚠️ Em atraso</span>';
+      if (m.limite && m.limite < hojeISO()) return '<span class="status-pill badge-overdue">Em atraso</span>';
       return '<span class="status-pill badge-ok">Em posse</span>';
     }
     if (m.limite && m.devolucao && m.devolucao > m.limite) return '<span class="status-pill badge-returned">Devolvido (atrasado)</span>';
@@ -2107,7 +2123,7 @@ function renderRelatorio() {
   };
 
   area.innerHTML = `
-    <h3>📊 Relatório de Empréstimos</h3>
+    <h3>Relatório de Empréstimos</h3>
     <div class="report-meta">
       <span class="chip">Período: ${escapeHtml(r.periodo)}</span>
       <span class="chip">Gerado em ${escapeHtml(r.geradoEm)}</span>
@@ -2126,9 +2142,9 @@ function renderRelatorio() {
       </div>
     </div>
 
-    ${listaRanking('Livros mais emprestados', '📈', topLivros, 'empréstimo(s)')}
-    ${listaRanking('Alunos que mais pegaram livros', '👨', topAlunos, 'empréstimo(s)')}
-    ${listaRanking('Salas que mais pegaram livros', '🏫', topSalas, 'empréstimo(s)')}
+    ${listaRanking('Livros mais emprestados', '', topLivros, 'empréstimo(s)')}
+    ${listaRanking('Alunos que mais pegaram livros', '', topAlunos, 'empréstimo(s)')}
+    ${listaRanking('Salas que mais pegaram livros', '', topSalas, 'empréstimo(s)')}
 
     <div class="report-section">
       <h4>Movimento de empréstimos (quem pegou, quando e como estava o livro)</h4>
@@ -2247,12 +2263,12 @@ async function carregarRelatoriosSalvos() {
       return `
         <div class="saved-report-item">
           <div class="sr-info">
-            <div class="sr-title">📄 ${escapeHtml(titulo)}</div>
+            <div class="sr-title">${escapeHtml(titulo)}</div>
             <div class="sr-date">${escapeHtml(String(data))}</div>
           </div>
           <div style="display:flex; gap:6px;">
-            <button type="button" class="secondary btn-small" data-ver-relatorio="${s.id}">👁️ Ver</button>
-            <button type="button" class="danger btn-small" data-apagar-relatorio="${s.id}">🗑️</button>
+            <button type="button" class="secondary btn-small" data-ver-relatorio="${s.id}">Ver</button>
+            <button type="button" class="danger btn-small" data-apagar-relatorio="${s.id}" aria-label="Apagar relatório">Apagar</button>
           </div>
         </div>
       `;
@@ -2311,7 +2327,7 @@ function renderHistoricoAtividades() {
   for (const e of state.emprestimos) {
     eventos.push({
       data: e.dataRetirada,
-      tipo: '📤 Empréstimo',
+      tipo: 'Empréstimo',
       aluno: `${e.alunoNome} (${e.alunoTurma})`,
       livro: e.livroTitulo
     });
@@ -2319,7 +2335,7 @@ function renderHistoricoAtividades() {
       const piorou = e.estadoSaida && e.estadoDevolucao && estadoPiorou(e.estadoSaida, e.estadoDevolucao);
       eventos.push({
         data: e.dataDevolucao,
-        tipo: piorou ? '📥 Devolução ⚠️' : '📥 Devolução',
+        tipo: piorou ? 'Devolução (atenção)' : 'Devolução',
         aluno: `${e.alunoNome} (${e.alunoTurma})`,
         livro: e.livroTitulo
       });
@@ -2327,13 +2343,20 @@ function renderHistoricoAtividades() {
   }
   eventos.sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
+  // A seção de Relatórios foi redesenhada (Etapa 9): a tabela legada
+  // (#relatoriosBody/#relatoriosEmpty) não existe mais. A função só
+  // atualiza o histórico quando os elementos estão presentes; o vazio
+  // da seção nova (#reportArea) já traz a orientação ao usuário.
   const tbody = $('#relatoriosBody');
+  const vazio = $('#relatoriosEmpty');
+  if (!tbody || !vazio) return;
+
   if (!eventos.length) {
     tbody.innerHTML = '';
-    $('#relatoriosEmpty').style.display = 'block';
+    vazio.style.display = 'block';
     return;
   }
-  $('#relatoriosEmpty').style.display = 'none';
+  vazio.style.display = 'none';
   tbody.innerHTML = eventos.slice(0, 100).map(ev => `
     <tr>
       <td>${formatarData(ev.data)}</td>
@@ -2385,14 +2408,30 @@ async function carregarStatusBackup() {
       $('#backupUltimo').textContent = formatarDataHora(st.ultimoBackup.criadoEm);
       const detalhe = descricaoContagens(st.ultimoBackup.contagens);
       $('#backupUltimoDetalhe').textContent = `${formatarTamanho(st.ultimoBackup.tamanho)}${detalhe ? ' • ' + detalhe : ''}`;
+      // Cards de contagens do último backup (dados reais do backup)
+      const c = st.ultimoBackup.contagens || null;
+      const boxCont = document.getElementById('backupUltimoContagens');
+      if (boxCont) {
+        if (c) {
+          boxCont.innerHTML = `
+            <div class="backup-stat"><span class="n">${c.livros ?? '—'}</span><span class="l">Livros</span></div>
+            <div class="backup-stat"><span class="n">${c.alunos ?? '—'}</span><span class="l">Alunos</span></div>
+            <div class="backup-stat"><span class="n">${c.emprestimos ?? '—'}</span><span class="l">Empréstimos</span></div>`;
+        } else {
+          boxCont.innerHTML = '';
+        }
+      }
     } else {
       $('#backupUltimo').textContent = 'Nenhum backup realizado.';
       $('#backupUltimoDetalhe').textContent = '';
+      const boxCont = document.getElementById('backupUltimoContagens');
+      if (boxCont) boxCont.innerHTML = '';
     }
     // Config automática
     const cfg = st.config || {};
     if ($('#backupAutomatico')) $('#backupAutomatico').checked = !!cfg.automatico;
     if ($('#backupFrequencia')) $('#backupFrequencia').value = cfg.frequencia || 'diario';
+    atualizarRotuloBackupAutomatico();
     if ($('#backupRetencaoInfo')) {
       $('#backupRetencaoInfo').textContent =
         `Backups automáticos são mantidos até o limite de ${st.retencao || 10}; os manuais nunca são apagados automaticamente.`;
@@ -2401,6 +2440,22 @@ async function carregarStatusBackup() {
     $('#backupUltimo').textContent = 'Não foi possível carregar o status.';
   }
   await carregarHistoricoBackup();
+}
+
+// Atualiza status + histórico ao abrir a seção Backup
+async function atualizarStatusBackup() {
+  await carregarStatusBackup();
+}
+
+// Rótulo textual do estado do backup automático (junto ao switch)
+function atualizarRotuloBackupAutomatico() {
+  const chk = $('#backupAutomatico');
+  const rotulo = document.getElementById('backupAutoEstado');
+  if (!chk || !rotulo) return;
+  const freq = ($('#backupFrequencia')?.value) || 'diario';
+  rotulo.textContent = chk.checked
+    ? `Backup automático ativado (${freq === 'semanal' ? 'semanal' : 'diário'})`
+    : 'Backup automático desativado';
 }
 
 async function carregarHistoricoBackup() {
@@ -2416,9 +2471,15 @@ async function carregarHistoricoBackup() {
             const d = new Date(b.criadoEm);
             const data = isNaN(d.getTime()) ? b.criadoEm : d.toLocaleDateString('pt-BR');
             const hora = isNaN(d.getTime()) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-            const tipo = b.tipo === 'automatico' ? 'automático' : 'manual';
-            return `<li style="padding:6px 0; border-bottom:1px solid var(--border,#eef2f7);">
-              ${data} ${hora} — ${formatarTamanho(b.tamanho)} <span class="muted">(${tipo})</span>
+            const automatico = b.tipo === 'automatico';
+            const badge = `<span class="status-pill ${automatico ? 'badge-soon' : 'badge-ok'}">${automatico ? 'Automático' : 'Manual'}</span>`;
+            const contagens = b.contagens ? `<span class="muted" style="font-weight:700; font-size:11.5px;">${descricaoContagens(b.contagens)}</span>` : '';
+            return `<li>
+              <span style="min-width:0; display:flex; flex-direction:column; gap:2px;">
+                <span>${data} ${hora} — ${formatarTamanho(b.tamanho)}</span>
+                ${contagens}
+              </span>
+              ${badge}
             </li>`;
           }).join('')
         : '<li class="muted">Nenhum backup realizado.</li>';
@@ -2429,11 +2490,11 @@ async function carregarHistoricoBackup() {
     const ulInt = $('#backupInternos');
     if (ulInt) {
       ulInt.innerHTML = internos.length
-        ? internos.map(b => `<li style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border,#eef2f7);">
+        ? internos.map(b => `<li>
             <span>${rotuloBackup(b)}</span>
             <span style="display:flex; gap:6px;">
-              <button type="button" class="secondary" data-baixar-backup="${b.arquivo}" style="padding:4px 8px; font-size:12px;">⬇️</button>
-              <button type="button" class="secondary" data-restaurar-backup="${b.arquivo}" style="padding:4px 8px; font-size:12px;">♻️</button>
+              <button type="button" class="secondary btn-icon" data-baixar-backup="${b.arquivo}" title="Baixar backup" aria-label="Baixar backup">↓</button>
+              <button type="button" class="secondary btn-icon" data-restaurar-backup="${b.arquivo}" title="Restaurar backup" aria-label="Restaurar backup">⟲</button>
             </span>
           </li>`).join('')
         : '<li class="muted">Nenhum backup interno.</li>';
@@ -2527,7 +2588,7 @@ async function enviarValidacao(file) {
     restoreValidado = data;
     preview.style.color = 'var(--muted)';
     preview.textContent =
-      `✔ Backup válido • ${formatarTamanho(data.tamanho)}${data.contagens ? ' • ' + descricaoContagens(data.contagens) : ''}`;
+      `Backup válido • ${formatarTamanho(data.tamanho)}${data.contagens ? ' • ' + descricaoContagens(data.contagens) : ''}`;
     $('#restaurarBtn').disabled = false;
   } catch (err) {
     preview.textContent = 'Falha ao validar o arquivo.';
@@ -2633,38 +2694,8 @@ async function importarBackup() {
   }
 }
 
-async function abrirModalReset() {
-  // Contagens reais para o modal
-  try {
-    const d = await api('/api/dashboard');
-    $('#resetStatusCounts').textContent = `${d.alunosTotal} aluno(s) • ${d.livrosTitulos} livro(s) • ${d.emprestimosAtivos} empréstimo(s) ativo(s)`;
-  } catch (e) {
-    $('#resetStatusCounts').textContent = '';
-  }
-  abrirModal('#modalConfirmarReset');
-}
-
-async function resetarTudo(comBackup) {
-  // Fazer backup NUNCA apaga sozinho: aqui o backup é uma ação SEPARADA e
-  // explícita, e a exclusão só acontece depois, com confirmação própria.
-  if (comBackup) {
-    try {
-      const r = await api('/api/backup/criar', { method: 'POST' });
-      toast(r.message || 'Backup criado. Prosseguindo com a exclusão...');
-    } catch (err) {
-      if (!confirm('Não foi possível criar o backup. Apagar mesmo assim?')) return;
-    }
-  }
-  try {
-    await api('/api/backup?confirmar=1', { method: 'DELETE' });
-    fecharModal('#modalConfirmarReset');
-    toast('Todos os dados foram apagados.');
-    await recarregarTudo();
-    await carregarStatusBackup();
-  } catch (err) {
-    toast(err.message, 'erro');
-  }
-}
+// Ação destrutiva "Apagar tudo" foi REMOVIDA na Etapa 9 (separação do Backup).
+// A única forma de recuperação de dados é via backup/restauração.
 
 // ============================================================
 // RANKING
@@ -2839,8 +2870,6 @@ function aplicarPreferencias(pref) {
   if (p.biblioteca_nome) {
     const brand = document.querySelector('.sidebar .brand .title span');
     if (brand) brand.textContent = p.biblioteca_nome;
-    const sub = $('#subtitleText');
-    if (sub) sub.textContent = p.biblioteca_nome;
   }
   if (p.responsavel_nome) {
     aplicarNomeNoCabecalho(p.responsavel_nome);
@@ -3121,10 +3150,11 @@ async function salvarSenha() {
 
 function aplicarNomeNoCabecalho(nome) {
   if (!nome) return;
-  const avatar = document.querySelector('.avatar .name');
-  if (avatar) avatar.textContent = nome;
   const hello = $('#helloText');
-  if (hello) hello.textContent = `Olá, ${nome} 👋`;
+  if (hello) {
+    hello.dataset.nome = nome;
+    hello.textContent = `Olá, ${nome}`;
+  }
 }
 
 // ============================================================
@@ -3306,9 +3336,7 @@ function bindEventos() {
   // ----- Backup -----
   $('#downloadBackupBtn').addEventListener('click', baixarBackup);
   $('#importarBtn').addEventListener('click', importarBackup);
-  $('#resetBtn').addEventListener('click', abrirModalReset);
-  $('#btnResetSemBackup').addEventListener('click', () => resetarTudo(false));
-  $('#btnResetComBackup').addEventListener('click', () => resetarTudo(true));
+  // Ação destrutiva "Apagar tudo" removida na Etapa 9.
 
   // Novo painel de backup
   if ($('#criarBackupBtn')) $('#criarBackupBtn').addEventListener('click', criarBackupAgora);
@@ -3457,7 +3485,9 @@ function bindEventos() {
       if (!alvo) return;
       const visivel = alvo.type === 'text';
       alvo.type = visivel ? 'password' : 'text';
-      btn.textContent = visivel ? '👁️' : '🙈';
+      const olhoAberto = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+      const olhoFechado = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">${visivel ? olhoFechado : olhoAberto}</svg>`;
     });
   });
 
@@ -3475,6 +3505,8 @@ function bindEventos() {
       carregarRanking();
     } else if (section === 'estante') {
       renderEstante();
+    } else if (section === 'backup') {
+      atualizarStatusBackup();
     }
   });
 }

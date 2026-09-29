@@ -98,7 +98,7 @@ export function getLoanStatus(emprestimo) {
       status: 'devolvido',
       text: 'Devolvido',
       badgeClass: 'badge-returned',
-      icon: '✅',
+      icon: '✓',
       daysDiff: 0
     };
   }
@@ -111,7 +111,7 @@ export function getLoanStatus(emprestimo) {
   const dHoje = parseDateToLocal(getTodayDateStr());
 
   if (!dLimite || !dHoje) {
-    return { status: 'ativo', text: 'Ativo', badgeClass: 'badge-ok', icon: '🟢', dataLimite };
+    return { status: 'ativo', text: 'Ativo', badgeClass: 'badge-ok', icon: '●', dataLimite };
   }
 
   const diffMs = dLimite.getTime() - dHoje.getTime();
@@ -124,7 +124,7 @@ export function getLoanStatus(emprestimo) {
       text: `Vencido há ${atraso} dia${atraso === 1 ? '' : 's'}`,
       shortText: `Vencido (${atraso}d)`,
       badgeClass: 'badge-overdue',
-      icon: '⚠️',
+      icon: '▲',
       diffDays,
       atraso,
       dataLimite
@@ -137,7 +137,7 @@ export function getLoanStatus(emprestimo) {
       text: 'Vence hoje!',
       shortText: 'Vence hoje',
       badgeClass: 'badge-warning',
-      icon: '⏳',
+      icon: '◷',
       diffDays: 0,
       dataLimite
     };
@@ -149,7 +149,7 @@ export function getLoanStatus(emprestimo) {
       text: 'Vence amanhã',
       shortText: 'Vence amanhã',
       badgeClass: 'badge-warning',
-      icon: '⏳',
+      icon: '◷',
       diffDays: 1,
       dataLimite
     };
@@ -161,7 +161,7 @@ export function getLoanStatus(emprestimo) {
       text: `Vence em ${diffDays} dias`,
       shortText: `${diffDays} dias restantes`,
       badgeClass: 'badge-soon',
-      icon: '⏳',
+      icon: '◷',
       diffDays,
       dataLimite
     };
@@ -172,7 +172,7 @@ export function getLoanStatus(emprestimo) {
     text: `No prazo (${diffDays} dias)`,
     shortText: 'No prazo',
     badgeClass: 'badge-ok',
-    icon: '🟢',
+    icon: '●',
     diffDays,
     dataLimite
   };
