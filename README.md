@@ -158,15 +158,27 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
 
 ## 🚀 Como Executar o Projeto
 
-1. Certifique-se de ter o [Node.js](https://nodejs.org) (recomendado: v24) instalado.
+1. Certifique-se de ter o [Node.js](https://nodejs.org) **22+** (recomendado: **v24 LTS**; o `better-sqlite3@13` exige Node >= 22) instalado.
 2. Instale as dependências:
    ```bash
    npm install
+   ```
+   (Windows/escola: duplo clique em **`INICIAR-BIBLIOTECA.bat`** — confere Node/dependências, valida a instalação e abre o navegador. Ver **`GUIA-DA-ESCOLA.md`** para requisitos, uso diário, backup e solução de problemas.)
+   Checagem de prontidão (somente leitura, não altera o banco):
+   ```bash
+   node scripts/verificar-instalacao.js
    ```
 3. Inicie o servidor:
    ```bash
    npm start
    ```
+   Uso na escola: porta **3000** (`http://localhost:3000`); se ocupada
+   (`EADDRINUSE`), use `PORT=3001`. **Internet opcional**: só é necessária para
+   `npm install` e para a busca de dados/capa por **ISBN**
+   (BrasilAPI → Google Books → Open Library, com fallback); todo o resto
+   (cadastro, DED, empréstimos, backup etc.) funciona offline. **Leitor USB**:
+   qualquer leitor HID "keyboard wedge" (plug-and-play, sem driver) — ele
+   "digita" o código + Enter no campo do modal, com foco automático.
 4. Acesse no navegador:
    ```
    http://localhost:3000
