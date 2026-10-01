@@ -16,6 +16,9 @@ cookies.txt
 # SQLite temporário
 *.db-shm
 *.db-wal
+
+# Etapa 13 — PID do servidor (encerramento controlado)
+.servidor.pid
 # Backups reais (nunca versionar)
 backups/
 

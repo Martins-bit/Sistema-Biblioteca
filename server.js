@@ -71,8 +71,23 @@ if (!SESSION_SECRET) {
   }
 }
 
-// Origens permitidas (desenvolvimento). Em produção, defina ALLOWED_ORIGINS.
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001').split(',');
+// Origens permitidas. Etapa 13.1: endereço local próprio http://biblioteca.localhost
+// (com e sem :3000) — o navegador resolve "*.localhost" para 127.0.0.1 sozinho (RFC 6761),
+// sem hosts/admin e sem tentar HTTPS. localhost/127.0.0.1 seguem como fallback técnico;
+// biblioteca.local (Etapa 13 antiga) fica só por compatibilidade — não é mais recomendado.
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
+  'http://biblioteca.localhost',
+  'http://biblioteca.localhost:3000',
+  'http://biblioteca.localhost:3001',
+  'http://biblioteca.local:3000',
+  'http://biblioteca.local:3001',
+  'http://biblioteca.local'
+].join(',')).split(',');
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -154,8 +169,30 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // diferentes => o login "não cola" e a página fica alternando
 // entre login.html e index.html em loop.
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n📚 Sistema da Biblioteca rodando em http://localhost:${PORT}\n`);
+  console.log(`\n📚 Sistema da Biblioteca rodando em http://localhost:${PORT}`);
+  console.log('   Endereço principal: http://biblioteca.localhost (sem configuração — o navegador resolve sozinho)\n');
 });
+
+// Etapa 13 — PID do processo: permite ao ENCERRAR-BIBLIOTECA.bat encerrar
+// EXATAMENTE este servidor (nunca "matar todo node.exe").
+try { require('fs').writeFileSync(path.join(__dirname, '.servidor.pid'), String(process.pid)); } catch (_) {}
+process.on('exit', () => { try { require('fs').unlinkSync(path.join(__dirname, '.servidor.pid')); } catch (_) {} });
+process.on('SIGINT', () => process.exit(0));  // Ctrl+C na janela do servidor
+process.on('SIGTERM', () => process.exit(0)); // Stop-Process (ENCERRAR-BIBLIOTECA.bat)
+
+// Etapa 13 — Mesmo backend (mesma instância Express, mesma sessão, mesma
+// memória) também na porta 80, para que http://biblioteca.localhost abra SEM
+// ":3000". NÃO é um segundo servidor: é um segundo socket da MESMA aplicação.
+// Se a porta 80 estiver ocupada/bloqueada, apenas avisa — o sistema continua
+// acessível em http://biblioteca.localhost:3000 e http://localhost:3000.
+if (process.env.PORTA80 !== '0') {
+  const alt = app.listen(80, '0.0.0.0', () => {
+    console.log('   Também ouvindo na porta 80 -> http://biblioteca.localhost');
+  });
+  alt.on('error', (e) => {
+    console.warn(`   Porta 80 indisponível (${e.code || e.message}). Use http://biblioteca.localhost:${PORT} ou http://localhost:${PORT}`);
+  });
+}
 
 // Backup automático: verifica na inicialização e periodicamente se o intervalo
 // (diário/semanal) venceu. Não usa setInterval ingênuo e evita concorrência com

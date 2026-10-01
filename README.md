@@ -163,7 +163,11 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
    ```bash
    npm install
    ```
-   (Windows/escola: duplo clique em **`INICIAR-BIBLIOTECA.bat`** — confere Node/dependências, valida a instalação e abre o navegador. Ver **`GUIA-DA-ESCOLA.md`** para requisitos, uso diário, backup e solução de problemas.)
+   (Windows/escola: duplo clique em **`INICIAR-BIBLIOTECA.bat`** — confere
+   Node/dependências, valida a instalação, inicia o servidor e abre o
+   navegador em **`http://biblioteca.localhost`**. Ver **`GUIA-DA-ESCOLA.md`**
+   para requisitos, uso diário, backup e solução de problemas.)
+
    Checagem de prontidão (somente leitura, não altera o banco):
    ```bash
    node scripts/verificar-instalacao.js
@@ -172,16 +176,37 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
    ```bash
    npm start
    ```
-   Uso na escola: porta **3000** (`http://localhost:3000`); se ocupada
-   (`EADDRINUSE`), use `PORT=3001`. **Internet opcional**: só é necessária para
-   `npm install` e para a busca de dados/capa por **ISBN**
-   (BrasilAPI → Google Books → Open Library, com fallback); todo o resto
-   (cadastro, DED, empréstimos, backup etc.) funciona offline. **Leitor USB**:
-   qualquer leitor HID "keyboard wedge" (plug-and-play, sem driver) — ele
-   "digita" o código + Enter no campo do modal, com foco automático.
+   **Uso na escola (Etapa 13):** clique duplo em **`INICIAR-BIBLIOTECA.bat`**
+   (ou no atalho **`Sistema da Biblioteca`** da Área de Trabalho, criado por
+   `CRIAR-ATALHO.bat`; o script tenta o nome `📚 Sistema da Biblioteca` e,
+   se o Windows recusar o emoji, grava sem ele). O launcher: confere Node/dependências, **evita dupla
+   instância** (se o sistema já está no ar, só abre o navegador), sobe o
+   servidor com node direto (sem `npm start`), espera a resposta e abre o
+   navegador. **Encerrar:** duplo clique em **`ENCERRAR-BIBLIOTECA.bat`**
+   (encerra exatamente o PID gravado pelo servidor; nunca mata "todo node").
+
+   **Endereços:**
+   - Principal: http://biblioteca.localhost — o navegador resolve `*.localhost`
+     para 127.0.0.1 sozinho (RFC 6761), sem hosts nem administrador. O
+     servidor, ao iniciar, também tenta ouvir na **porta 80** para abrir sem
+     o `:3000`; se a porta 80 estiver ocupada, use `http://biblioteca.localhost:3000`.
+   - Fallback: http://localhost:3000 (sem necessidade de administrador).
+Se a porta 3000 estiver ocupada por outro programa, será necessário
+iniciar o sistema usando PORT=3001.
+- Com a porta 80 ocupada por outro programa:
+      **`http://biblioteca.localhost:3000`**.
+
+   **Internet opcional**: só é necessária para `npm install` e para a busca de
+   dados/capa por **ISBN** (BrasilAPI → Google Books → Open Library, com
+   fallback); todo o resto (cadastro, DED, empréstimos, backup, encerramento)
+   funciona offline. **Leitor USB**: qualquer leitor HID "keyboard wedge"
+   (plug-and-play, sem driver) — ele "digita" o código + Enter no campo do
+   modal, com foco automático.
 4. Acesse no navegador:
    ```
-   http://localhost:3000
+   http://biblioteca.localhost      (principal — porta 80)
+   http://biblioteca.localhost:3000 (principal, se a porta 80 estiver ocupada)
+   http://localhost:3000            (fallback técnico, sempre disponível)
    ```
 5. **Crie as contas da equipe** (não há cadastro público nem credenciais padrão):
    ```bash
@@ -189,10 +214,7 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
    ```
    O script pergunta **Nome**, **E-mail** e **Senha**, salva o hash e **nunca** exibe
    nem grava a senha em texto puro. Repita para cada bibliotecária (ex.: Bárbara, Natali).
-6. Acesse com o **e-mail** e a **senha** cadastrados:
-   ```
-   http://localhost:3000
-   ```
+6. Acesse com o **e-mail** e a **senha** cadastrados no endereço escolhido acima.
 
 ---
 
