@@ -38,10 +38,9 @@ Calculada automaticamente no backend (`services/reputacao.js`) pelo histórico r
 
 ## ✨ Novidades e Funcionalidades Implementadas
 
-### 1. 🛡️ Confirmação com Recomendação de Backup ao Apagar Tudo
-- **Modal de Confirmação Crítica**: Ao clicar no botão *"Apagar tudo"*, o sistema exibe uma janela de alerta destacando o impacto da ação e o número exato de registros (livros, alunos, empréstimos e relatórios) que seriam removidos.
-- **Recomendação de Backup Automático**: Destaque para o botão *"💾 Fazer Backup e Apagar"*, que baixa automaticamente um arquivo `.json` com todos os dados antes de limpar o banco/armazenamento.
-- **Prevenção contra Exclusões Acidentais**: O botão de exclusão direta exige confirmação extra.
+### 1. 🔒 Exclusão total desativada
+- Não existe botão nem endpoint para apagar todos os dados da biblioteca.
+- Exclusões individuais continuam sujeitas às validações de cada cadastro; restaurações permanecem em fluxo separado e explícito.
 
 ### 2. 📷 Leitor de Código de Barras / QR Code para Cadastro e Empréstimo
 - **Cadastro Ágil por Código / ISBN**: O formulário tradicional de cadastro de livros foi mantido integralmente e complementado pelo botão *"📷 Ler QR / Código de Barras (ISBN)"*.
@@ -138,9 +137,8 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
 
 ### Segurança do banco (`biblioteca.db`)
 
-- Backup e restauração **nunca** apagam/zeram o banco real fora do fluxo explícito de restauração.
-- **“Fazer backup”** e **“Apagar tudo”** são ações **separadas** — fazer backup
-  nunca apaga dados automaticamente. A exclusão total exige confirmação própria.
+- Backup e restauração não executam exclusão total; não existe ação de reset pela interface ou API.
+- A restauração de um backup é o único fluxo que substitui dados e exige confirmação explícita, após criar um pré-restore.
 - Arquivos temporários de QA/validação são removidos ao final de cada operação.
 
 ### Rotas da API (todas autenticadas)
@@ -155,7 +153,6 @@ Em qualquer erro, **o banco atual não é alterado**. Backup em JSON antigo cont
 | POST | `/api/backup/validar` | Valida um arquivo enviado (sem restaurar) |
 | POST | `/api/backup/restaurar` | Restaura (exige `confirmar=1`) |
 | GET/POST | `/api/backup` | Exportar / Importar JSON |
-| DELETE | `/api/backup?confirmar=1` | Apaga todos os dados (exige confirmação) |
 
 ---
 

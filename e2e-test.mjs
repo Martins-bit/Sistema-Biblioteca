@@ -171,23 +171,11 @@ export default async function run(page, ui) {
     await page.click('#btnFecharModalNotif');
     await page.waitForTimeout(300);
 
-    // 10. Testar Modal de Confirmação do Botão "Apagar Tudo"
+    // 10. Verificar que a exclusão total não está disponível na interface.
     await page.click('.nav-item[data-nav="relatorios"]');
     await page.waitForTimeout(400);
-    await page.click('#btnResetarTudo');
-    await page.waitForTimeout(300);
-
-    const resetModalInfo = await page.evaluate(() => {
-      const modal = document.getElementById('modalConfirmarReset');
-      const isVisible = modal && modal.classList.contains('active');
-      const btnBackup = !!document.getElementById('btnConfirmarBackupReset');
-      const btnDangerous = !!document.getElementById('btnConfirmarResetSemBackup');
-      return { isVisible, btnBackup, btnDangerous };
-    });
-    assert(resetModalInfo.isVisible && resetModalInfo.btnBackup && resetModalInfo.btnDangerous, 'Modal de Confirmação de Apagar Tudo com proteção de backup validado com sucesso');
-
-    await page.click('#btnCancelarReset');
-    await page.waitForTimeout(300);
+    const resetControls = await page.locator('#resetBtn, #modalConfirmarReset, #btnResetComBackup, #btnResetSemBackup').count();
+    assert(resetControls === 0, 'A interface não oferece exclusão total de dados');
 
     // 11. Testar Geração de Relatório Resumo
     await page.click('#btnGerarRelatorioResumo');

@@ -99,14 +99,10 @@ export default async function run(page, ui) {
   await page.click('#modalQrEtiqueta .modal-close-btn');
   await page.waitForTimeout(300);
 
-  // 9. Testar Modal de Apagar Tudo com Aviso de Backup
-  await page.click('#resetBtn');
-  await page.waitForTimeout(300);
-  results.modalResetAberto = await page.evaluate(() => document.querySelector('#modalConfirmarReset').classList.contains('show'));
-  results.temBotaoBackupEApagar = await page.evaluate(() => !!document.querySelector('#btnResetComBackup'));
-  results.temBotaoApagarSemBackup = await page.evaluate(() => !!document.querySelector('#btnResetSemBackup'));
-  await page.click('#modalConfirmarReset .modal-close-btn');
-  await page.waitForTimeout(300);
+  // 9. A interface não deve expor um fluxo de exclusão total.
+  results.exclusaoTotalIndisponivel = await page.evaluate(() =>
+    !document.querySelector('#resetBtn, #modalConfirmarReset, #btnResetComBackup, #btnResetSemBackup')
+  );
 
   return results;
 }

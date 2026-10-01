@@ -82,13 +82,15 @@ function verificarSituacao(conn, alunoId, rep) {
     };
   }
 
-  // Sem bloqueio ativo: se nota < 3,0, inicia novo bloqueio de 21 dias
-  if (rep.nota < NOTA_MINIMA) {
+  const anterior = conn.prepare(
+    'SELECT id, notaNoBloqueio FROM bloqueios WHERE alunoId = ? AND encerrado = 1 ORDER BY id DESC LIMIT 1'
+  ).get(alunoId);
+  const caiuDesdeUltimoBloqueio = !anterior || rep.nota < anterior.notaNoBloqueio;
+
+  // A expiração libera o aluno; outro bloqueio exige uma nova queda da nota.
+  if (rep.nota < NOTA_MINIMA && caiuDesdeUltimoBloqueio) {
     const dataFim = adicionarDias(hoje, DIAS_BLOQUEIO);
     const motivo = `Avaliação abaixo de ${NOTA_MINIMA.toFixed(1).replace('.', ',')} estrelas no momento do bloqueio`;
-    const anterior = conn.prepare(
-      'SELECT id FROM bloqueios WHERE alunoId = ? AND encerrado = 1 ORDER BY id DESC LIMIT 1'
-    ).get(alunoId);
     const ordem = anterior ? 'novo' : 'primeiro';
 
     conn.prepare(

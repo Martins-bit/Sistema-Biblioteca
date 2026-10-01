@@ -5,8 +5,8 @@ const casos = [
   ['0-306-40615-2', 'Internacional ISBN-10 com hífens'],
   ['9780306406157', 'Mesmo livro, ISBN-13 equivalente'],
   ['9788525406958', 'Brasileiro (Companhia das Letras)'],
-  ['9999999999999', 'ISBN inexistente (DV válido, mas nenhuma API conhece)'],
-  ['9788535910629', 'Vidas Secas — Graciliano Ramos (brasileiro)'],
+  ['9799999999990', 'ISBN válido inexistente (DV válido, sem registro nas APIs)'],
+  ['9788535910629', 'EU, PRIMATA: POR QUE SOMOS COMO SOMOS (BrasilAPI)'],
   ['9780132350884', 'Clean Code — internacional (ISBN-13)']
 ];
 

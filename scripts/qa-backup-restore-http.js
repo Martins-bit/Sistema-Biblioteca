@@ -24,7 +24,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 function prepararEspelho() {
   fs.mkdirSync(MIRROR, { recursive: true });
   // Copia código-fonte necessário
-  for (const item of ['server.js', 'db.js', 'middleware', 'routes', 'services', 'public', 'package.json']) {
+  for (const item of ['server.js', 'db.js', 'middleware', 'routes', 'services', 'public', 'package.json', 'scripts']) {
     const src = path.join(ROOT, item);
     if (!fs.existsSync(src)) continue;
     const dst = path.join(MIRROR, item);
@@ -46,6 +46,10 @@ function prepararEspelho() {
 async function main() {
   console.log('\n=== QA HTTP: fluxo de restauração (espelho isolado) ===');
   prepararEspelho();
+  require(path.join(MIRROR, 'scripts', 'create-user.js')).criarUsuario({
+    nome: 'QA Restauração', email: 'qa-restore@escola.exemplo', senha: 'QaRestore123'
+  });
+  require(path.join(MIRROR, 'db.js')).fechar();
   console.log('Espelho:', MIRROR);
 
   const srv = spawn(process.execPath, ['server.js'], {
@@ -69,10 +73,14 @@ async function main() {
 
   try {
     let cookie = '';
+    let csrf = null;
     async function fj(url, opts = {}) {
       const headers = { ...(opts.headers || {}) };
       if (cookie) headers['Cookie'] = cookie;
       if (opts.json) headers['Content-Type'] = 'application/json';
+      if (csrf && ['POST', 'PUT', 'PATCH', 'DELETE'].includes((opts.method || 'GET').toUpperCase())) {
+        headers['X-CSRF-Token'] = csrf;
+      }
       const res = await fetch(`${BASE}${url}`, {
         method: opts.method || 'GET', headers,
         body: opts.json ? JSON.stringify(opts.json) : opts.body
@@ -84,8 +92,12 @@ async function main() {
     }
 
     // Login
-    const login = await fj('/api/auth/login', { method: 'POST', json: { username: 'admin', password: '1234' } });
+    const csrfAnon = await fj('/api/auth/csrf');
+    csrf = csrfAnon.data && csrfAnon.data.csrfToken;
+    const login = await fj('/api/auth/login', { method: 'POST', json: { email: 'qa-restore@escola.exemplo', password: 'QaRestore123' } });
     verifica('login ok', login.status === 200);
+    const csrfAuth = await fj('/api/auth/csrf');
+    csrf = csrfAuth.data && csrfAuth.data.csrfToken;
 
     // Cria dados: um livro e um aluno
     const livro = await fj('/api/livros', { method: 'POST', json: { titulo: 'Livro A', autor: 'Autor A', categoria: 'Teste', acervo: 1 } });
@@ -129,7 +141,9 @@ async function main() {
     const fd = new FormData();
     fd.append('arquivo', new Blob([fs.readFileSync(invalido)]), 'invalido.db');
     fd.append('confirmar', '1');
-    const resInv = await fetch(`${BASE}/api/backup/restaurar`, { method: 'POST', headers: { Cookie: cookie }, body: fd });
+    const resInv = await fetch(`${BASE}/api/backup/restaurar`, {
+      method: 'POST', headers: { Cookie: cookie, 'X-CSRF-Token': csrf }, body: fd
+    });
     verifica('restaurar arquivo inválido => 422', resInv.status === 422, String(resInv.status));
     const dash4 = await fj('/api/dashboard');
     verifica('banco atual intacto após arquivo inválido', dash4.data.livrosTitulos === livrosAntes, String(dash4.data.livrosTitulos));
@@ -147,8 +161,11 @@ async function main() {
 
   } finally {
     srv.kill();
-    await sleep(400);
-    try { fs.rmSync(MIRROR, { recursive: true, force: true }); console.log('Espelho removido.'); } catch (e) { console.log('Aviso ao limpar espelho:', e.message); }
+    await new Promise(resolve => srv.once('exit', resolve));
+    for (let tentativa = 0; tentativa < 5; tentativa++) {
+      try { fs.rmSync(MIRROR, { recursive: true, force: true }); console.log('Espelho removido.'); break; }
+      catch (e) { if (tentativa === 4) console.log('Aviso ao limpar espelho:', e.message); else await sleep(300); }
+    }
   }
 
   console.log(`\n=== Resultado restauração ===\nPassou: ${passou} | Falhou: ${falhou}`);

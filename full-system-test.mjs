@@ -253,30 +253,13 @@ async function runTests() {
   });
   await page.waitForTimeout(300);
 
-  // 10. Test Reset Modal (Confirm and Safeguards)
-  await logStep('10. Testando Modal de Confirmação do Botão "Apagar Tudo"...');
+  // 10. Verify that total data deletion is unavailable.
+  await logStep('10. Verificando indisponibilidade da exclusão total...');
   await page.click('.nav-item[data-nav="relatorios"]');
   await page.waitForTimeout(400);
 
-  const resetModalResult = await page.evaluate(() => {
-    const btnReset = document.getElementById('btnResetarTudo');
-    if (btnReset) btnReset.click();
-    const modal = document.getElementById('modalConfirmarReset');
-    return {
-      modalOpened: modal && modal.classList.contains('active'),
-      hasBackupButton: !!document.getElementById('btnConfirmarBackupReset'),
-      hasDangerousButton: !!document.getElementById('btnConfirmarResetSemBackup'),
-      hasCancelButton: !!document.getElementById('btnCancelarReset')
-    };
-  });
-  console.log('Modal de Confirmação de Reset:', resetModalResult);
-  if (!resetModalResult.modalOpened) errorsFound.push('Modal de confirmação do Reset não abriu ao clicar no botão Apagar Tudo.');
-
-  // Cancel reset
-  await page.evaluate(() => {
-    document.getElementById('btnCancelarReset')?.click();
-  });
-  await page.waitForTimeout(300);
+  const resetControls = await page.locator('#resetBtn, #modalConfirmarReset, #btnResetComBackup, #btnResetSemBackup').count();
+  if (resetControls !== 0) errorsFound.push('A interface ainda expõe controles de exclusão total.');
 
   // 11. Test QR Code Scanner Modal
   await logStep('11. Testando Modal do Scanner QR Code...');

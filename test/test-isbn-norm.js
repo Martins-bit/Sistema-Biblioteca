@@ -6,6 +6,7 @@ const casos = [
   ['0-306-40615-2', true],
   ['0306406152', true],
   ['9798535914848', true],   // 979 válido: não converte para 10
+  ['9799999999990', true],   // dígito válido, embora sem registro nas APIs
   ['9781234567890', false],  // DV errado (o correto seria 7)
   ['12345', false],
   ['', false],

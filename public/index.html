@@ -240,6 +240,7 @@
     /* Main */
     .main {
       grid-column: 2;
+      min-width: 0;
       padding: 20px 18px 34px;
     }
 
@@ -2392,6 +2393,8 @@
       .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     }
     @media (max-width: 430px) {
+      .topbar { flex-wrap: wrap; }
+      .topbar .left, .topbar .right { flex: 1 1 100%; }
       .stats { grid-template-columns: 1fr; }
       .emp-filters { gap: 4px; }
       .backup-stats { grid-template-columns: 1fr 1fr; }

@@ -1,4 +1,4 @@
-// routes/backup.js - Backup, restauração e limpeza dos dados.
+// routes/backup.js - Backup e restauração dos dados.
 //
 // Todas as rotas deste router são protegidas por requireAuth (ver server.js),
 // então NÃO reimplementamos autenticação aqui.
@@ -14,7 +14,6 @@
 //   POST   /api/backup/validar         -> valida um arquivo enviado (sem restaurar)
 //   POST   /api/backup/restaurar       -> restaura um backup (com pre-restore + confirmação)
 //   POST   /api/backup                 -> importa dados de um JSON antigo (merge)
-//   DELETE /api/backup                 -> apaga TODOS os dados (ação separada e explícita)
 
 const express = require('express');
 const fs = require('fs');
@@ -511,31 +510,6 @@ router.post('/', (req, res) => {
   } catch (error) {
     console.error('Erro ao importar backup:', error);
     res.status(500).json({ error: 'Erro interno do servidor ao importar backup' });
-  }
-});
-
-// DELETE /api/backup - Apaga TODOS os dados (ação separada e explícita).
-// NUNCA é executada automaticamente por um backup. Exige confirmação explícita.
-router.delete('/', (req, res) => {
-  const confirmar = req.body?.confirmar === '1' || req.query.confirmar === '1';
-  if (!confirmar) {
-    return res.status(400).json({ error: 'Exclusão total não confirmada.' });
-  }
-  try {
-    const conn = db();
-    const tx = conn.transaction(() => {
-      conn.prepare('DELETE FROM emprestimos').run();
-      conn.prepare('DELETE FROM bloqueios').run();
-      conn.prepare('DELETE FROM historico_avaliacao').run();
-      conn.prepare('DELETE FROM alunos').run();
-      conn.prepare('DELETE FROM livros').run();
-      conn.prepare('DELETE FROM relatorios').run();
-    });
-    tx();
-    res.json({ ok: true, message: 'Todos os dados foram apagados' });
-  } catch (error) {
-    console.error('Erro ao apagar dados:', error);
-    res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
 

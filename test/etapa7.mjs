@@ -3,6 +3,7 @@
 // copia o projeto, symlink node_modules e sobe o servidor numa porta efêmera.
 // Uso: node test/etapa7.mjs
 import { spawn, execSync } from 'node:child_process';
+import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -220,6 +221,21 @@ try {
   const listaAlunos = (await req('GET', '/api/alunos')).data;
   const bruno = listaAlunos.find(a => a.id === a2.id);
   ok(bruno && bruno.bloqueado === true, 'listagem de alunos marca bloqueado (integração reputação)');
+
+  const dbTeste = new Database(path.join(MIRROR, 'biblioteca.db'));
+  dbTeste.prepare('UPDATE bloqueios SET dataFim = ? WHERE alunoId = ? AND encerrado = 0').run(dia(-1), a2.id);
+  dbTeste.close();
+  const expirado = await notaDe(a2.id);
+  ok(expirado && !expirado.bloqueado && expirado.nota === a2nota, 'bloqueio expirado libera o aluno mantendo a nota');
+  const aposExpiracao = await emprestar(a2.id, l2.id, { dataRetirada: dia(0) });
+  ok(aposExpiracao.status === 201, 'aluno pode emprestar após cumprir os 21 dias');
+  await devolver(aposExpiracao.data.id, { dataDevolucao: dia(0), estadoDevolucao: 'Bom' });
+  const recuperado = await notaDe(a2.id);
+  ok(!recuperado.bloqueado && recuperado.nota > expirado.nota, 'devolução no prazo recupera gradualmente sem re-bloquear');
+  const novaQueda = await emprestar(a2.id, l2.id, { dataRetirada: dia(-40), dataLimite: dia(-33), estadoSaida: 'Bom' });
+  await devolver(novaQueda.data.id, { dataDevolucao: dia(0), estadoDevolucao: 'Bom' });
+  const rebloqueado = await notaDe(a2.id);
+  ok(rebloqueado.bloqueado && rebloqueado.nota < expirado.nota, 'nova queda abaixo da nota anterior inicia novo bloqueio');
 
   secao('Cancelamento');
   const e4 = (await emprestar(a1.id, l2.id, { dataRetirada: dia(0) })).data;

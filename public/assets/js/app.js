@@ -3410,7 +3410,12 @@ function bindEventos() {
   }
   // Cores customizadas
   if ($('#themeColorPrimary')) $('#themeColorPrimary').addEventListener('input', (e) => {
-    if (!preferenciasAtuais.paleta) aplicarPreferencias({ cor_destaque: e.target.value });
+    if (preferenciasAtuais.paleta) {
+      preferenciasAtuais.paleta = null;
+      window.__prefPaleta = null;
+      marcarSelecoesPersonalizacao();
+    }
+    aplicarPreferencias({ paleta: null, cor_destaque: e.target.value });
     if ($('#themeColorPrimaryHex')) $('#themeColorPrimaryHex').textContent = e.target.value;
   });
   if ($('#themeColorBg')) $('#themeColorBg').addEventListener('input', (e) => {
