@@ -24,10 +24,11 @@ const db = require('../db');
 const backup = require('../services/backup');
 
 // Upload em memória: arquivos de backup são pequenos e evitamos lixo em disco.
-// Limite de 200 MB para folga; acima disso recusamos.
+// Limite ajustado para 50 MB (folga ampla p/ um SQLite escolar; 200 MB em
+// memória abria margem p/ exaustão de RAM via upload autenticado).
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 200 * 1024 * 1024 }
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 }
 });
 
 // Base64 para arquivos .db enviados como JSON (alternativa ao FormData).

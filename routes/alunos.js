@@ -119,6 +119,16 @@ router.post('/', (req, res) => {
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ error: 'Nome é obrigatório' });
   }
+  // Etapa 11: o nome do aluno também é exibido via innerHTML (com escape) no
+  // frontend — recusar marcação aqui impede XSS persistente mesmo se alguma
+  // tela futura esquecer o escape. Limite 80 = mesmo teto de validarNome().
+  const nomeAluno = String(nome).trim();
+  if (nomeAluno.length > 80) {
+    return res.status(400).json({ error: 'O nome deve ter no máximo 80 caracteres.' });
+  }
+  if (/[<>]/.test(nomeAluno)) {
+    return res.status(400).json({ error: 'O nome contém caracteres não permitidos (<, >).' });
+  }
   if (!turma || !String(turma).trim()) {
     return res.status(400).json({ error: 'Turma é obrigatória' });
   }
@@ -159,6 +169,13 @@ router.put('/:id', (req, res) => {
 
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ error: 'Nome é obrigatório' });
+  }
+  const nomeEdit = String(nome).trim();
+  if (nomeEdit.length > 80) {
+    return res.status(400).json({ error: 'O nome deve ter no máximo 80 caracteres.' });
+  }
+  if (/[<>]/.test(nomeEdit)) {
+    return res.status(400).json({ error: 'O nome contém caracteres não permitidos (<, >).' });
   }
   if (!turma || !String(turma).trim()) {
     return res.status(400).json({ error: 'Turma é obrigatória' });

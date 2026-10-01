@@ -57,6 +57,14 @@ router.post('/', (req, res) => {
   if (!titulo || !autor || !categoria) {
     return res.status(400).json({ error: 'Título, autor e categoria são obrigatórios' });
   }
+  // Etapa 11 (defesa em profundidade): o frontend escapa na exibição, mas o
+  // backend também recusa marcação — evita armazenar XSS persistente.
+  for (const [rotulo, valor, max] of [['Título', titulo, 200], ['Autor', autor, 120], ['Categoria', categoria, 80]]) {
+    const s = String(valor).trim();
+    if (!s) return res.status(400).json({ error: `${rotulo} é obrigatório` });
+    if (s.length > max) return res.status(400).json({ error: `${rotulo} excede ${max} caracteres.` });
+    if (/[<>]/.test(s)) return res.status(400).json({ error: `${rotulo} contém caracteres não permitidos (<, >).` });
+  }
   if (!capaValida(capaUrl)) {
     return res.status(400).json({ error: 'URL da capa inválida' });
   }
@@ -98,6 +106,12 @@ router.put('/:id', (req, res) => {
 
   if (!titulo || !autor || !categoria) {
     return res.status(400).json({ error: 'Título, autor e categoria são obrigatórios' });
+  }
+  for (const [rotulo, valor, max] of [['Título', titulo, 200], ['Autor', autor, 120], ['Categoria', categoria, 80]]) {
+    const s = String(valor).trim();
+    if (!s) return res.status(400).json({ error: `${rotulo} é obrigatório` });
+    if (s.length > max) return res.status(400).json({ error: `${rotulo} excede ${max} caracteres.` });
+    if (/[<>]/.test(s)) return res.status(400).json({ error: `${rotulo} contém caracteres não permitidos (<, >).` });
   }
   if (!capaValida(capaUrl)) {
     return res.status(400).json({ error: 'URL da capa inválida' });

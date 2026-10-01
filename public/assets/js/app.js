@@ -2493,8 +2493,8 @@ async function carregarHistoricoBackup() {
         ? internos.map(b => `<li>
             <span>${rotuloBackup(b)}</span>
             <span style="display:flex; gap:6px;">
-              <button type="button" class="secondary btn-icon" data-baixar-backup="${b.arquivo}" title="Baixar backup" aria-label="Baixar backup">↓</button>
-              <button type="button" class="secondary btn-icon" data-restaurar-backup="${b.arquivo}" title="Restaurar backup" aria-label="Restaurar backup">⟲</button>
+              <button type="button" class="secondary btn-icon" data-baixar-backup="${escapeHtml(b.arquivo)}" title="Baixar backup" aria-label="Baixar backup">↓</button>
+              <button type="button" class="secondary btn-icon" data-restaurar-backup="${escapeHtml(b.arquivo)}" title="Restaurar backup" aria-label="Restaurar backup">⟲</button>
             </span>
           </li>`).join('')
         : '<li class="muted">Nenhum backup interno.</li>';
@@ -2577,7 +2577,9 @@ async function enviarValidacao(file) {
   try {
     const fd = new FormData();
     fd.append('arquivo', file);
-    const res = await fetch('/api/backup/validar', { method: 'POST', credentials: 'include', body: fd });
+    const token = await obterCsrfToken();
+    const headers = token ? { 'X-CSRF-Token': token } : {};
+    const res = await fetch('/api/backup/validar', { method: 'POST', credentials: 'include', headers, body: fd });
     const data = await res.json();
     if (!res.ok || !data.valido) {
       restoreValidado = null;
@@ -2620,7 +2622,7 @@ function abrirModalRestore() {
   const info = $('#restoreInfo');
   if (info) {
     info.innerHTML =
-      `<strong>Arquivo:</strong> ${restoreValidado.nome}<br/>` +
+      `<strong>Arquivo:</strong> ${escapeHtml(restoreValidado.nome)}<br/>` +
       `<strong>Tamanho:</strong> ${formatarTamanho(restoreValidado.tamanho)}<br/>` +
       (restoreValidado.contagens ? `<strong>Conteúdo:</strong> ${descricaoContagens(restoreValidado.contagens)}` : '');
   }
@@ -2631,17 +2633,19 @@ async function confirmarRestore() {
   const btn = $('#confirmarRestoreBtn');
   if (btn) { btn.disabled = true; btn.textContent = 'Restaurando...'; }
   try {
+    const token = await obterCsrfToken();
+    const csrfHeader = token ? { 'X-CSRF-Token': token } : {};
     let res;
     if (arquivoRestoreSelecionado) {
       const fd = new FormData();
       fd.append('arquivo', arquivoRestoreSelecionado);
       fd.append('confirmar', '1');
-      res = await fetch('/api/backup/restaurar', { method: 'POST', credentials: 'include', body: fd });
+      res = await fetch('/api/backup/restaurar', { method: 'POST', credentials: 'include', headers: csrfHeader, body: fd });
     } else if (backupInternoSelecionado) {
       res = await fetch('/api/backup/restaurar', {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...csrfHeader },
         body: JSON.stringify({ nome: backupInternoSelecionado, confirmar: '1' })
       });
     } else {
